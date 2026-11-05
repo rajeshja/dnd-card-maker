@@ -1,0 +1,6 @@
+{
+	"moduleFileExtensions": ["js"],
+	"transform": {},
+	"roots": ["<rootDir>/test"],
+	"testMatch": ["**/*.test.js"]
+}

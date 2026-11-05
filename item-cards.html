@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Item Card Printer</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Crimson+Pro:wght@400;600&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="css/card-tool.css">
+</head>
+
+<body>
+    <div id="overlay" class="overlay">
+        <div class="ring"></div>
+        <div id="overlay-text" class="overlay-text">Loading...</div>
+    </div>
+    <div id="app">
+        <header id="topbar">
+            <h1 id="page-title"></h1>
+            <div class="topbar-actions"><span class="count"><strong id="selection-count">0</strong> selected <span
+                        id="entity-label"></span></span><button id="save-book" class="btn">Save</button><button
+                    id="clear-selection" class="btn">Clear</button><span class="zoom-controls"><button id="zoom-out"
+                        class="btn">-</button><span id="zoom-label">100%</span><button id="zoom-in"
+                        class="btn">+</button></span><span id="print-actions" hidden><button id="print-fronts"
+                        class="btn primary">Print</button><button id="print-backs" class="btn">Print
+                        backs</button><button id="toggle-side" class="btn">Show backs</button><button id="debug-print"
+                        class="btn">Debug Print</button></span></div>
+        </header>
+        <aside id="sidebar">
+            <div class="sidebar-section"><input id="query" class="search" type="search"></div>
+            <div id="filter-groups"></div>
+            <div class="sidebar-section sort-row"><select id="sort" class="sort"></select></div>
+            <div id="result-bar"><span id="result-count">0</span><button id="select-visible"
+                    class="filter-action">Select visible</button></div>
+            <div id="entity-list"></div>
+        </aside>
+        <main id="main">
+            <div id="selection-tray"><span class="tray-empty">No cards selected</span></div>
+            <div id="preview-wrap">
+                <div id="placeholder" class="placeholder">
+                    <div class="placeholder-icon">🎴</div>
+                    <div class="placeholder-text">Select entries to preview cards</div>
+                </div>
+                <div id="screen-pages" hidden></div>
+            </div>
+        </main>
+    </div>
+    <div id="print-debug-bar" aria-live="polite">
+        <button id="btn-toggle-bg" type="button">Background Graphics: ON</button>
+        <button id="btn-exit-debug" type="button">Exit Print Debug</button>
+    </div>
+    <div id="print-area"></div>
+    <script src="js/card-tool-utils.js" type="module"></script>
+    <script src="js/card-tool.js" type="module"></script>
+    <script src="js/item-cards.js" type="module"></script>
+</body>
+
+</html>

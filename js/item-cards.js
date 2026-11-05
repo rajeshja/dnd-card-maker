@@ -1,0 +1,11 @@
+import {flattenCardEntries} from "./card-tool-text.js";
+
+const itemEscape = value => String(value ?? "").replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[char]));
+const itemEntries = value => flattenCardEntries(value);
+const itemCard = item => `<div class="card-inner"><article class="entity-card"><h1 class="entity-title">${itemEscape(item.name)}</h1><hr class="entity-rule"><div class="entity-meta">${itemEscape([item.type, item.rarity, item.source].filter(Boolean).join(" · "))}</div><div class="entity-body"><p>${itemEscape(itemEntries(item.entries))}</p></div></article></div>`;
+const itemBack = item => `<div class="card-inner"><div class="entity-back"><small>Item Card</small><h1 class="back-card-title">${itemEscape(item.name)}</h1><span>${itemEscape(item.rarity || item.source)}</span>${item.imageHref ? `<img class="entity-back-image" src="${itemEscape(item.imageHref)}" alt="" onerror="this.remove()">` : ""}</div></div>`;
+CardTool.start({ type: "item", page: { rows: 2, columns: 4, orientation: "landscape" }, entityLabel: "Items", title: "Item Card Printer", base: "./5etools/data/", payload: "item", files: ["items-base", "items"], baseSources: ["DMG", "XDMG", "PHB"], prepare: async items => {
+	const data = await fetch("./5etools/data/fluff-items.json").then(response => response.ok ? response.json() : null);
+	const byId = new Map((data?.itemFluff || []).map(entry => [`${entry.source}|${entry.name}`, entry.images?.[0]?.href?.path]).filter(([, path]) => path));
+	return items.map(item => ({ ...item, imageHref: byId.get(`${item.source}|${item.name}`) ? `img/${byId.get(`${item.source}|${item.name}`)}` : null }));
+}, filters: [{ id: "source", label: "Source", values: item => [item.source] }, { id: "type", label: "Type", values: item => [item.type || "Other"] }, { id: "rarity", label: "Rarity", values: item => [item.rarity] }], sortOptions: [{ value: "name", label: "Name A to Z" }, { value: "type", label: "Type" }], sort: (a, b, mode) => mode === "type" ? String(a.type).localeCompare(String(b.type)) || a.name.localeCompare(b.name) : a.name.localeCompare(b.name), color: () => "#3a6ea5", listMeta: item => [item.type, item.rarity, item.source].filter(Boolean).join(" · "), render: (side, item) => side === "back" ? itemBack(item) : itemCard(item) });

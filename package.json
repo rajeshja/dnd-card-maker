@@ -1,0 +1,19 @@
+{
+	"name": "dnd-card-maker",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"description": "Standalone spell, item, and beast card printers for 5etools data.",
+	"scripts": {
+		"serve": "http-server -c-1 --cors -p 5050 .",
+		"test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
+		"test:unit": "npm test"
+	},
+	"devDependencies": {
+		"http-server": "^14.1.1",
+		"jest": "^30.2.0"
+	},
+	"engines": {
+		"node": ">=20"
+	}
+}

@@ -1,0 +1,7 @@
+node_modules/
+img/
+test/temp/
+desktop.ini
+.DS_Store
+Thumbs.db
+*.log
