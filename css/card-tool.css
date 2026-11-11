@@ -102,6 +102,44 @@ button {
     background: rgba(201, 168, 76, .12)
 }
 
+.layout-group {
+    display: inline-flex;
+    align-items: stretch
+}
+
+.layout-seg {
+    border: 1px solid var(--gold-dim);
+    border-radius: 0;
+    background: transparent;
+    color: var(--gold);
+    padding: .38rem .7rem;
+    font: 600 .67rem 'Cinzel', serif;
+    letter-spacing: .05em
+}
+
+.layout-seg:first-child {
+    border-radius: 2px 0 0 2px
+}
+
+.layout-seg:last-child {
+    border-radius: 0 2px 2px 0
+}
+
+.layout-seg+.layout-seg {
+    border-left: 0
+}
+
+.layout-seg:hover {
+    border-color: var(--gold);
+    background: rgba(201, 168, 76, .12)
+}
+
+.layout-seg[aria-pressed="true"] {
+    border-color: var(--gold);
+    background: var(--gold);
+    color: var(--deep)
+}
+
 #sidebar {
     grid-row: 2;
     display: flex;

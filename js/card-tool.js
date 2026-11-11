@@ -6,34 +6,16 @@
 		selected: new Map(),
 		clearedGroups: new Set(),
 		zoom: 1,
-		side: "front",
+		layout: "fronts",
 	};
 
 	const $ = id => document.getElementById(id);
 	const esc = value => String(value ?? "").replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[char]));
 	const utils = globalThis.CardToolUtils;
+	const pagePlan = globalThis.CardToolPages;
 
 	function idOf (entity) {
 		return `${state.config.type}|${entity.name}|${entity.source}`;
-	}
-
-	function pageSize () {
-		return state.config.page.rows * state.config.page.columns;
-	}
-
-	function pages (items) {
-		const result = [];
-		for (let i = 0; i < items.length; i += pageSize()) result.push(items.slice(i, i + pageSize()));
-		return result;
-	}
-
-	function mirrorPage (page) {
-		const mirrored = [];
-		for (let row = 0; row < state.config.page.rows; row++) {
-			const start = row * state.config.page.columns;
-			mirrored.push(...page.slice(start, start + state.config.page.columns).reverse());
-		}
-		return mirrored;
 	}
 
 	async function load () {
@@ -152,20 +134,25 @@
 		else hidePreview();
 	}
 
+	function updateLayoutButtons () {
+		document.querySelectorAll("#layout-group [data-layout]").forEach(button => {
+			button.setAttribute("aria-pressed", String(button.dataset.layout === state.layout));
+		});
+	}
+
 	function buildPreview () {
 		const selectedItems = [...state.selected.values()].sort((a, b) => state.config.sort(a, b, $("sort").value));
 		const items = selectedItems.flatMap(entity => state.config.expand ? state.config.expand(entity) : [entity]);
-		const grouped = pages(items);
+		const plan = pagePlan.buildPagePlan(items, state.config.page, state.layout);
+		const sheetCount = plan.reduce((count, entry) => Math.max(count, entry.sheetIndex), 0);
 		const screen = $("screen-pages");
 		const print = $("print-area");
 		screen.innerHTML = "";
 		print.innerHTML = "";
-		grouped.forEach((page, index) => {
-			while (page.length < pageSize()) page.push(null);
-			const visible = state.side === "back" ? mirrorPage(page) : page;
+		plan.forEach(entry => {
 			const label = document.createElement("div");
 			label.className = "page-label";
-			label.textContent = `Page ${index + 1} of ${grouped.length}${state.side === "back" ? " (Backs)" : ""}`;
+			label.textContent = `Sheet ${entry.sheetIndex} of ${sheetCount} - ${entry.side === "back" ? "Backs" : "Fronts"}`;
 			screen.appendChild(label);
 			const screenPage = document.createElement("div");
 			screenPage.className = "screen-page";
@@ -173,21 +160,22 @@
 			const printPage = document.createElement("div");
 			printPage.className = "page";
 			applyPageLayout(printPage);
-			visible.forEach((entity, position) => {
+			entry.cards.forEach((entity, position) => {
 				const screenCard = document.createElement("div");
 				screenCard.className = `screen-card${entity ? "" : " empty"}`;
-				screenCard.innerHTML = entity ? state.config.render(state.side, entity) : "";
+				screenCard.innerHTML = entity ? state.config.render(entry.side, entity) : "";
 				screenPage.appendChild(screenCard);
 				const printCard = document.createElement("div");
 				printCard.className = `card${entity ? "" : " empty"}`;
 				if ((position + 1) % state.config.page.columns === 0) printCard.style.borderRight = "0";
 				if (position >= (state.config.page.rows - 1) * state.config.page.columns) printCard.style.borderBottom = "0";
-				printCard.innerHTML = entity ? state.config.render(state.side, entity) : "";
+				printCard.innerHTML = entity ? state.config.render(entry.side, entity) : "";
 				printPage.appendChild(printCard);
 			});
 			screen.appendChild(screenPage);
 			print.appendChild(printPage);
 		});
+		updateLayoutButtons();
 		$("placeholder").hidden = true;
 		screen.hidden = false;
 		$("print-actions").hidden = false;
@@ -212,7 +200,8 @@
 		$("print-area").innerHTML = "";
 		document.body.classList.remove("print-debug");
 		document.body.classList.remove("no-bg-graphics");
-		state.side = "front";
+		state.layout = "fronts";
+		updateLayoutButtons();
 	}
 
 	function updateDebugButtons () {
@@ -356,13 +345,19 @@
 		$("clear-selection").addEventListener("click", clearSelection);
 		$("zoom-out").addEventListener("click", () => setZoom(-0.1));
 		$("zoom-in").addEventListener("click", () => setZoom(0.1));
-		$("toggle-side").addEventListener("click", () => { state.side = state.side === "front" ? "back" : "front"; buildPreview(); });
+		$("layout-group").addEventListener("click", event => {
+			const button = event.target.closest("[data-layout]");
+			if (!button) return;
+			state.layout = button.dataset.layout;
+			updateLayoutButtons();
+			buildPreview();
+		});
 		$("debug-print").addEventListener("click", togglePrintDebug);
 		$("btn-exit-debug").addEventListener("click", togglePrintDebug);
 		$("btn-toggle-bg").addEventListener("click", toggleBgGraphics);
-		$("print-fronts").addEventListener("click", () => window.print());
-		$("print-backs").addEventListener("click", () => { state.side = "back"; buildPreview(); window.print(); });
+		$("print-cards").addEventListener("click", () => window.print());
 		$("save-book").addEventListener("click", saveBook);
+		updateLayoutButtons();
 		$("overlay-text").textContent = `Loading ${config.entityLabel.toLowerCase()}...`;
 		load().then(() => { buildFilters(); filter(); $("overlay").hidden = true; }).catch(error => { $("overlay-text").textContent = `Unable to load ${config.entityLabel.toLowerCase()}: ${error.message}`; });
 	}

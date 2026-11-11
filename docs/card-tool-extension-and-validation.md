@@ -23,13 +23,16 @@ Reuse those schemas or shared modules only after checking their browser-loading 
 
 ## Validation Checklist
 
-There are no card-printing unit, browser, snapshot, asset, or print tests for the standalone pages. For changes, manually verify:
+`npm test` runs the card-tool unit tests in `test/`: filter helpers, entry text flattening, and the DOM-free page plan. The page plan tests cover chunking, final-page padding, front ordering, per-row back mirroring on 4x2 and 2x2 grids, and Both interleaving for full and partial chunks. The inline page JavaScript and print layout still require browser checks.
+
+For changes, manually verify:
 
 - all intended data files load over HTTP;
 - search, every filter group, sorting, select-visible, remove, and clear for each page type;
 - long titles, long descriptions, tables, missing optional fields, and page-specific edge cases;
 - saved books, Add/Replace, malformed JSON, unmatched sources, and export/import round trips;
-- front preview, back preview, final-page padding, zoom, Print Debug, and A4 Print Preview;
+- Fronts, Backs, and Both previews, including paired sheet labels, final-page padding, reset-to-Fronts on clear, zoom, and console cleanliness;
+- Debug Print under each layout matches the preview page sequence and sides, plus A4 Print Preview;
 - duplex back position alignment and the browser's background-graphics-off behavior;
 - presence and correct path/casing of every card-back asset.
 
