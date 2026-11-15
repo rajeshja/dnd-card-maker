@@ -2,12 +2,12 @@
 
 ## 1. Strip-based page plan
 
-- [ ] 1.1 Define the strip descriptor and cell descriptor in `js/card-tool-pages.js` (`entity`, `span`, `width`, `bucket`, `truncated`, `fontPt`, `panels`; cells carry `strip`, `panelIndex`, `back`, `guides`), and verify with a unit test that a one-panel strip maps to exactly one occupied cell.
-- [ ] 1.2 Replace greedy chunking with bucket packing: group input strips by bucket in the order given, compute `stripsPerSheet = floor(columns / width) * rows`, chunk each bucket into fresh sheets, pad the last sheet, and keep `sheetIndex` continuous across buckets. Verify with `npm test` cases asserting 8/4/4/2/2 strips per sheet for widths 1/2/2/4/4 on a 4x2 page and 4/2/2 on a 2x2 page.
-- [ ] 1.3 Derive back pages per cell by placing each front panel's back role at printed column `columns + 1 - column`, with roles art/art/page-3/blank/blank/page-5 per span. Verify with tests for spans 1 through 5 on both page geometries, including that padding stays `null` and interior accordion backs are `blank` rather than absent.
-- [ ] 1.4 Compute guide roles per cell (`right` and `bottom` as `cut`, `fold`, or `null`) for strip-internal folds, strip and row cuts, page edges, and padding. Verify with tests asserting a 4x2 span-2 sheet has folds inside each strip and cuts between strips and rows, while a 4x2 span-4 sheet has three folds and no interior horizontal cut.
-- [ ] 1.5 Rewrite `test/cards/CardToolPages.test.js` for the new input and output shape, replacing the flat-`cards` assertions with cell and back-role assertions, and verify the full file passes with `npm test`.
-- [ ] 1.6 Update the page-plan and back-mapping sections of `docs/card-tool-rendering-and-printing.md` to describe strips, buckets, and per-panel back roles, and verify the documented shapes match the exported signatures and the tests.
+- [x] 1.1 Define the strip descriptor and cell descriptor in `js/card-tool-pages.js` (`entity`, `span`, `width`, `bucket`, `truncated`, `fontPt`, `panels`; cells carry `strip`, `panelIndex`, `back`, `guides`), and verify with a unit test that a one-panel strip maps to exactly one occupied cell.
+- [x] 1.2 Replace greedy chunking with bucket packing: group input strips by bucket in the order given, compute `stripsPerSheet = floor(columns / width) * rows`, chunk each bucket into fresh sheets, pad the last sheet, and keep `sheetIndex` continuous across buckets. Verify with `npm test` cases asserting 8/4/4/2/2 strips per sheet for widths 1/2/2/4/4 on a 4x2 page and 4/2/2 on a 2x2 page.
+- [x] 1.3 Derive back pages per cell by placing each front panel's back role at printed column `columns + 1 - column`, with roles art/art/page-3/blank/blank/page-5 per span. Verify with tests for spans 1 through 5 on both page geometries, including that padding stays `null` and interior accordion backs are `blank` rather than absent.
+- [x] 1.4 Compute guide roles per cell (`right` and `bottom` as `cut`, `fold`, or `null`) for strip-internal folds, strip and row cuts, page edges, and padding. Verify with tests asserting a 4x2 span-2 sheet has folds inside each strip and cuts between strips and rows, while a 4x2 span-4 sheet has three folds and no interior horizontal cut.
+- [x] 1.5 Rewrite `test/cards/CardToolPages.test.js` for the new input and output shape, replacing the flat-`cards` assertions with cell and back-role assertions, and verify the full file passes with `npm test`.
+- [x] 1.6 Update the page-plan and back-mapping sections of `docs/card-tool-rendering-and-printing.md` to describe strips, buckets, and per-panel back roles, and verify the documented shapes match the exported signatures and the tests.
 
 ## 2. Measurement, shrink ladder, and truncation marker
 
@@ -32,9 +32,9 @@
 
 ## 5. Preview and print integration
 
-- [ ] 5.1 Change `buildPreview()` in `js/card-tool.js` to consume strip plans and render panel fragments, blank interior backs, and padding cells from cell roles instead of `config.render(side, entity)` per grid position. Verify over `npm run serve` that a three-panel spell shows page 3 on the back of its second panel and that interior accordion backs are blank.
-- [ ] 5.2 Replace the uniform dashed card borders and the inline `borderRight` / `borderBottom` clearing with guide attributes from the plan. Verify in the preview and in Print Preview that strip-internal boundaries are dashed, strip and row boundaries are solid, and sheet edges have no line.
-- [ ] 5.3 Keep preview and Debug Print page parity and page labels after the new plan shape, including sheet counts that span buckets. Verify that Debug Print shows the same sequence as the preview under Fronts, Backs, and Both.
+- [x] 5.1 Change `buildPreview()` in `js/card-tool.js` to consume strip plans and render panel fragments, blank interior backs, and padding cells from cell roles instead of `config.render(side, entity)` per grid position. Verify over `npm run serve` that a three-panel spell shows page 3 on the back of its second panel and that interior accordion backs are blank.
+- [x] 5.2 Replace the uniform dashed card borders and the inline `borderRight` / `borderBottom` clearing with guide attributes from the plan. Verify in the preview and in Print Preview that strip-internal boundaries are dashed, strip and row boundaries are solid, and sheet edges have no line.
+- [x] 5.3 Keep preview and Debug Print page parity and page labels after the new plan shape, including sheet counts that span buckets. Verify that Debug Print shows the same sequence as the preview under Fronts, Backs, and Both.
 - [ ] 5.4 Update `docs/card-tool-architecture.md` for the strip plan and shared flow module, and verify the documented call path matches `buildPreview()` as implemented.
 
 ## 6. Content mode control
