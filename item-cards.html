@@ -24,7 +24,11 @@
                         id="entity-label"></span></span><button id="save-book" class="btn">Save</button><button
                     id="clear-selection" class="btn">Clear</button><span class="zoom-controls"><button id="zoom-out"
                         class="btn">-</button><span id="zoom-label">100%</span><button id="zoom-in"
-                        class="btn">+</button></span><span id="print-actions" hidden><span id="layout-group"
+                        class="btn">+</button></span><span id="print-actions" hidden><span id="content-group"
+                        class="layout-group content-group" role="group" aria-label="Content mode"><button
+                            class="layout-seg" type="button" data-content="single"
+                            aria-pressed="true">Single card</button><button class="layout-seg" type="button"
+                            data-content="overflow" aria-pressed="false">Overflow</button></span><span id="layout-group"
                         class="layout-group" role="group" aria-label="Card layout"><button class="layout-seg"
                             type="button" data-layout="fronts" aria-pressed="true">Fronts</button><button
                             class="layout-seg" type="button" data-layout="backs"
@@ -59,6 +63,7 @@
     </div>
     <div id="print-area"></div>
     <script src="js/card-tool-utils.js" type="module"></script>
+    <script src="js/card-tool-flow.js" type="module"></script>
     <script src="js/card-tool-pages.js" type="module"></script>
     <script src="js/card-tool.js" type="module"></script>
     <script src="js/item-cards.js" type="module"></script>

@@ -107,6 +107,10 @@ button {
     align-items: stretch
 }
 
+.content-group {
+    margin-right: .35rem
+}
+
 .layout-seg {
     border: 1px solid var(--gold-dim);
     border-radius: 0;
@@ -541,12 +545,12 @@ button {
 
 .beast-statblock {
     gap: .55mm;
-    font-size: 11pt;
+    font-size: var(--beast-body-pt, 11pt);
     line-height: 1.12
 }
 
 .beast-statblock h1 {
-    font-size: 20pt;
+    font-size: calc(var(--beast-body-pt, 11pt) * 1.818);
     line-height: 1.05
 }
 
@@ -556,16 +560,12 @@ button {
 }
 
 .beast-compact {
-    font-size: 10.5pt
-}
-
-.beast-compact h1 {
-    font-size: 20pt
+    font-size: calc(var(--beast-body-pt, 11pt) * .955)
 }
 
 .beast-subtitle {
     color: #463824;
-    font-size: 10.8pt;
+    font-size: calc(var(--beast-body-pt, 11pt) * .982);
     font-style: italic
 }
 
@@ -601,7 +601,7 @@ button {
 }
 
 .beast-abilities span {
-    font-size: 10.4pt
+    font-size: calc(var(--beast-body-pt, 11pt) * .945)
 }
 
 .beast-details {
@@ -619,7 +619,7 @@ button {
 .beast-section h3 {
     margin: .25mm 0 0;
     color: #7a2929;
-    font: 700 13pt 'Cinzel', serif
+    font: 700 calc(var(--beast-body-pt, 11pt) * 1.182) 'Cinzel', serif
 }
 
 .beast-entry strong {
@@ -895,9 +895,21 @@ body.print-debug #print-debug-bar {
 
 .material-component {
     color: #806e48;
-    font-size: 8.2pt;
+    font-size: .84em;
     font-style: italic;
     flex-shrink: 0
+}
+
+.card-ellipsis {
+    display: inline;
+    font-weight: 400;
+    letter-spacing: .04em;
+    white-space: nowrap
+}
+
+.item-title-suffix {
+    font-weight: 400;
+    font-size: .8em
 }
 
 .back-card-inner {

@@ -149,12 +149,19 @@
 
 	function buildStrips (selectedItems) {
 		if (state.config.flow) {
-			const context = {
-				mode: state.contentMode,
-				page: state.config.page,
-				maxPanels: globalThis.CardToolFlow?.maxPanels(state.config.page),
-			};
-			return selectedItems.map(entity => state.config.flow(entity, context));
+			const flow = globalThis.CardToolFlow;
+			const measure = flow.createMeasure(state.config.page);
+			try {
+				const context = {
+					mode: state.contentMode,
+					page: state.config.page,
+					maxPanels: flow.maxPanels(state.config.page),
+					measure,
+				};
+				return selectedItems.map(entity => state.config.flow(entity, context));
+			} finally {
+				measure.dispose();
+			}
 		}
 		const items = selectedItems.flatMap(entity => state.config.expand ? state.config.expand(entity) : [entity]);
 		return items.map(entity => ({
@@ -347,8 +354,12 @@
 	function fitBeastTitle (title) {
 		const suffix = title.dataset.titleSuffix || "";
 		const name = title.textContent.slice(0, title.textContent.length - suffix.length);
+		const statblock = title.closest(".beast-statblock");
+		const bodyPt = Number.parseFloat(getComputedStyle(statblock ?? title).getPropertyValue("--beast-body-pt")) || 11;
+		const startPt = Math.min(14, bodyPt * 1.27);
+		const minPt = Math.max(8.8, bodyPt * 0.9);
 		title.style.whiteSpace = "nowrap";
-		title.style.fontSize = "14pt";
+		title.style.fontSize = `${startPt}pt`;
 		const availableWidth = title.clientWidth || title.parentElement?.clientWidth || 353;
 		const clone = title.cloneNode(true);
 		clone.style.cssText = "position:fixed;left:-10000px;white-space:nowrap;width:max-content;visibility:hidden";
@@ -357,7 +368,7 @@
 			clone.textContent = text;
 			return clone.offsetWidth <= availableWidth;
 		};
-		while (parseFloat(title.style.fontSize) > 11 && !fits(title.textContent)) title.style.fontSize = `${Math.max(11, parseFloat(title.style.fontSize) - 0.25)}pt`;
+		while (parseFloat(title.style.fontSize) > minPt && !fits(title.textContent)) title.style.fontSize = `${Math.max(minPt, parseFloat(title.style.fontSize) - 0.25)}pt`;
 		if (fits(title.textContent)) {
 			clone.remove();
 			return;
@@ -385,13 +396,15 @@
 		root.querySelectorAll(".card-inner").forEach(inner => {
 			const body = inner.querySelector(".entity-body");
 			if (!body) return;
-			body.style.fontSize = `${fit.description.defaultPt}pt`;
-			body.style.lineHeight = fit.description.defaultLineHeight;
+			const startPt = Number(inner.dataset.contentPt) || fit.description.defaultPt;
+			const startLineHeight = Number(body.style.lineHeight) || fit.description.defaultLineHeight;
+			body.style.fontSize = `${startPt}pt`;
+			body.style.lineHeight = startLineHeight;
 			while (fit.description.minPt < parseFloat(body.style.fontSize) && hasOverflow(inner)) {
 				const size = Math.max(fit.description.minPt, parseFloat(body.style.fontSize) - fit.description.stepPt);
-				const progress = (fit.description.defaultPt - size) / (fit.description.defaultPt - fit.description.minPt);
+				const progress = startPt <= fit.description.minPt ? 1 : (startPt - size) / (startPt - fit.description.minPt);
 				body.style.fontSize = `${size}pt`;
-				body.style.lineHeight = (fit.description.defaultLineHeight - (fit.description.defaultLineHeight - fit.description.minLineHeight) * progress).toFixed(3);
+				body.style.lineHeight = (startLineHeight - (startLineHeight - fit.description.minLineHeight) * progress).toFixed(3);
 			}
 		});
 		if (isPrint) root.classList.remove("fit-measure");
