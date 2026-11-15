@@ -14,6 +14,14 @@ function backRoles (span) {
 	return ["art", "blank", "blank", "page"];
 }
 
+function stripWidth (strip, columns) {
+	return Math.max(1, Math.min(strip.width ?? 1, columns));
+}
+
+function packingClass (strip, columns) {
+	return (strip.bucket ?? "1") === "truncated" ? "truncated" : `width-${stripWidth(strip, columns)}`;
+}
+
 function sheetCapacity (rows, columns, width) {
 	return Math.max(1, Math.floor(columns / Math.max(1, Math.min(width, columns)))) * rows;
 }
@@ -21,7 +29,7 @@ function sheetCapacity (rows, columns, width) {
 function buildFrontCells (strips, rows, columns) {
 	const cells = [];
 	for (const strip of strips) {
-		const width = Math.max(1, Math.min(strip.width ?? 1, columns));
+		const width = stripWidth(strip, columns);
 		for (let panelIndex = 0; panelIndex < width; panelIndex++) {
 			cells.push({strip, panelIndex, back: null, guides: null});
 		}
@@ -29,6 +37,19 @@ function buildFrontCells (strips, rows, columns) {
 	const capacity = rows * columns;
 	while (cells.length < capacity) cells.push(null);
 	return cells.slice(0, capacity);
+}
+
+function sheetBuckets (frontCells) {
+	const seen = new Set();
+	const buckets = [];
+	for (const cell of frontCells) {
+		if (!cell) continue;
+		const bucket = cell.strip.bucket ?? "1";
+		if (seen.has(bucket)) continue;
+		seen.add(bucket);
+		buckets.push(bucket);
+	}
+	return buckets;
 }
 
 function buildBackCells (frontCells, rows, columns) {
@@ -77,21 +98,43 @@ export function buildPagePlan (strips, page, layout = "fronts") {
 		buckets.get(bucket).push(strip);
 	}
 	const orderedBuckets = [...buckets.entries()].sort(([left], [right]) => bucketRank(left) - bucketRank(right));
-	let sheetIndex = 0;
-	for (const [bucket, bucketStrips] of orderedBuckets) {
+	const classes = new Map();
+	for (const [, bucketStrips] of orderedBuckets) {
 		if (!bucketStrips.length) continue;
-		const width = Math.max(1, Math.min(bucketStrips[0].width ?? 1, columns));
+		for (const strip of bucketStrips) {
+			const key = packingClass(strip, columns);
+			let packing = classes.get(key);
+			if (!packing) {
+				packing = {width: stripWidth(strip, columns), strips: []};
+				classes.set(key, packing);
+			}
+			packing.width = Math.max(packing.width, stripWidth(strip, columns));
+			packing.strips.push(strip);
+		}
+	}
+	let sheetIndex = 0;
+	for (const {width, strips: classStrips} of classes.values()) {
 		const perSheet = sheetCapacity(rows, columns, width);
-		for (let offset = 0; offset < bucketStrips.length; offset += perSheet) {
-			const chunk = bucketStrips.slice(offset, offset + perSheet);
+		for (let offset = 0; offset < classStrips.length; offset += perSheet) {
+			const chunk = classStrips.slice(offset, offset + perSheet);
 			const frontCells = assignGuides(buildFrontCells(chunk, rows, columns), rows, columns);
 			const backCells = assignGuides(buildBackCells(frontCells, rows, columns), rows, columns);
+			const bucketsOnSheet = sheetBuckets(frontCells);
 			sheetIndex++;
-			if (normalizedLayout !== "backs") plan.push({side: "front", sheetIndex, bucket, cells: frontCells});
-			if (normalizedLayout !== "fronts") plan.push({side: "back", sheetIndex, bucket, cells: backCells});
+			if (normalizedLayout !== "backs") plan.push({side: "front", sheetIndex, buckets: bucketsOnSheet, cells: frontCells});
+			if (normalizedLayout !== "fronts") plan.push({side: "back", sheetIndex, buckets: bucketsOnSheet, cells: backCells});
 		}
 	}
 	return plan;
 }
 
-globalThis.CardToolPages = {buildPagePlan};
+export function bucketHeadingSlots (plan) {
+	const seen = new Set();
+	return plan.map(entry => entry.buckets.filter(bucket => {
+		if (seen.has(bucket)) return false;
+		seen.add(bucket);
+		return true;
+	}));
+}
+
+globalThis.CardToolPages = {buildPagePlan, bucketHeadingSlots};
