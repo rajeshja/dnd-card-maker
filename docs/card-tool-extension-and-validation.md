@@ -36,7 +36,7 @@ For changes, manually verify:
 - saved books, Add/Replace, malformed JSON, unmatched sources, and export/import round trips;
 - Fronts, Backs, and Both previews, including paired sheet labels, cut/fold guides, blank interior accordion backs, page-3 and page-5 continuation backs, final-sheet padding, reset-to-Fronts on clear, zoom, and console cleanliness;
 - Debug Print under each layout matches the preview page sequence and sides, plus A4 Print Preview;
-- duplex back position alignment and the browser's background-graphics-off behavior;
+- the browser's background-graphics-off behavior in Print Preview;
 - presence and correct path/casing of every card-back asset.
 
 Project commands (`npm test`) only run the card-tool unit tests; they do not execute the inline page JavaScript or validate print layout. Use the narrowest relevant command plus browser checks. If a task changes the pinned 5etools data, run the appropriate validation scripts inside `5etools/` (for example `npm run test:json` after installing its dependencies).

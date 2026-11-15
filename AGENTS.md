@@ -25,7 +25,7 @@ Choose only the topic needed for the change:
 - The current loader uses explicit per-page `FILES` allowlists and page `base` paths under `5etools/data/`. Update them deliberately when adding or removing sources.
 - Filters default to all available values for each entity type. Multiple active chip filters are conjunctive.
 - Card page geometry comes from each tool's `page` configuration (`rows`, `columns`, and `orientation`). Spell and item cards use A4 landscape with a 4x2 or 2x4 grid; beast cards use A4 portrait with a 2x2 grid.
-- Back pages mirror each row for duplex printing. Do not change this without testing physical alignment.
+- Back pages mirror each row for duplex printing. Do not change this without updating the page-plan mirroring tests and the Backs preview.
 - Keep front and back rendering synchronized: `buildPreview()` generates both screen and print DOM from the same page items.
 - Preserve the versioned cardbook format and typed references when changing persistence; do not silently coerce old spell-only data into a broader schema without explicit compatibility logic.
 - Escape user/data text before inserting it into generated card HTML. Do not interpolate untrusted values into attributes without escaping.

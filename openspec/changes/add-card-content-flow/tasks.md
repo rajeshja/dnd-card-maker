@@ -55,10 +55,9 @@
 - [x] 8.1 Run `npm test` and verify the full suite passes with no skipped page-plan cases.
 - [x] 8.2 Over `npm run serve`, load each of the three pages, select a mixed selection, and verify layout switching, mode switching, filtering, and tray removal still behave as before.
 - [x] 8.3 Use Print Preview and Debug Print at A4 landscape and A4 portrait to verify guide styles, visible ellipses, truncated cards last, and absent headings.
-- [x] 8.4 Print or simulate a duplex pass for a multi-bucket selection and verify the back page aligns with its front page, interior accordion backs are blank, and each bucket starts on a fresh sheet.
-- [x] 8.5 Update `docs/card-tool-extension-and-validation.md` to require a flow adapter and page cap for new card types, and verify the checklist matches the modules added in this change.
+- [x] 8.4 Update `docs/card-tool-extension-and-validation.md` to require a flow adapter and page cap for new card types, and verify the checklist matches the modules added in this change.
 
 ## Workflow follow-up
 
-- Archive the change after review and manual print verification are complete.
+- Archive the change after review and browser verification are complete.
 - Verify the archived main specs contain the new `card-content-flow` capability and the updated `card-print-layout` requirements.

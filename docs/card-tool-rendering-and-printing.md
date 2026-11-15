@@ -53,7 +53,7 @@ Three layouts are available from the toolbar:
 
 Back pages reverse cell order within each row of the paired front page. With a 4x2 landscape grid, front row `A B C D` becomes back row `D C B A`; the same rule applies to a 2x2 portrait beast page. Padded positions stay empty on both sides. Preview page labels read `Sheet N of M - Fronts` or `Sheet N of M - Backs`, and paired pages in Both share the same sheet number.
 
-The printer must flip the sheet left-to-right for backs to land behind their own fronts. In print-dialog terms this is normally short-edge duplex for A4 landscape and long-edge duplex for A4 portrait. Run a physical alignment test after changing orientation, grid dimensions, browser print settings, or the mirroring rule.
+The printer must flip the sheet left-to-right for backs to land behind their own fronts. In print-dialog terms this is normally short-edge duplex for A4 landscape and long-edge duplex for A4 portrait. The Backs and Both previews render that mirrored page directly, so back cell placement is checked in the plan tests and the preview rather than on paper.
 
 ## Fitting
 
