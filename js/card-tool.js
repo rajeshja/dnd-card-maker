@@ -7,6 +7,7 @@
 		clearedGroups: new Set(),
 		zoom: 1,
 		layout: "fronts",
+		contentMode: "single",
 	};
 
 	const $ = id => document.getElementById(id);
@@ -140,16 +141,100 @@
 		});
 	}
 
+	function updateContentButtons () {
+		document.querySelectorAll("#content-group [data-content]").forEach(button => {
+			button.setAttribute("aria-pressed", String(button.dataset.content === state.contentMode));
+		});
+	}
+
+	function buildStrips (selectedItems) {
+		if (state.config.flow) {
+			const context = {
+				mode: state.contentMode,
+				page: state.config.page,
+				maxPanels: globalThis.CardToolFlow?.maxPanels(state.config.page),
+			};
+			return selectedItems.map(entity => state.config.flow(entity, context));
+		}
+		const items = selectedItems.flatMap(entity => state.config.expand ? state.config.expand(entity) : [entity]);
+		return items.map(entity => ({
+			entity,
+			span: 1,
+			width: 1,
+			bucket: "1",
+			truncated: false,
+			fontPt: null,
+			panels: [{index: 0, role: "only", html: state.config.render("front", entity), continuation: false}],
+		}));
+	}
+
+	function applyGuides (element, cell) {
+		if (!cell?.guides) return;
+		if (cell.guides.right) element.dataset.guideRight = cell.guides.right;
+		if (cell.guides.bottom) element.dataset.guideBottom = cell.guides.bottom;
+	}
+
+	function cellHtml (side, cell) {
+		if (!cell) return "";
+		if (side === "front") return cell.strip.panels[cell.panelIndex]?.html ?? "";
+		if (cell.back === "art") return state.config.render("back", cell.strip.entity);
+		if (cell.back === "page") return cell.strip.panels[cell.panelIndex]?.html ?? "";
+		return "";
+	}
+
+	function describeBuckets (plan) {
+		const buckets = new Map();
+		for (const entry of plan) {
+			let bucket = buckets.get(entry.bucket);
+			if (!bucket) {
+				bucket = {strips: new Set(), sheets: new Set()};
+				buckets.set(entry.bucket, bucket);
+			}
+			bucket.sheets.add(entry.sheetIndex);
+			for (const cell of entry.cells) {
+				if (cell) bucket.strips.add(cell.strip);
+			}
+		}
+		return buckets;
+	}
+
+	function bucketHeading (info, bucket, sheetCount) {
+		const count = info?.strips.size ?? 0;
+		const sheets = [...(info?.sheets ?? [])].sort((a, b) => a - b);
+		const first = sheets[0] ?? 1;
+		const last = sheets[sheets.length - 1] ?? first;
+		const name = bucket === "truncated" ? "Truncated" : `${bucket}-page cards`;
+		const cards = `${count} card${count === 1 ? "" : "s"}`;
+		const sheetRange = first === last ? `sheets ${first} of ${sheetCount}` : `sheets ${first}-${last}`;
+		let label = `${name} — ${cards}, ${sheetRange}`;
+		if (state.layout === "both") {
+			const firstPage = first * 2 - 1;
+			const lastPage = last * 2;
+			label += firstPage === lastPage ? `, page ${firstPage}` : `, pages ${firstPage}-${lastPage}`;
+		}
+		return label;
+	}
+
 	function buildPreview () {
 		const selectedItems = [...state.selected.values()].sort((a, b) => state.config.sort(a, b, $("sort").value));
-		const items = selectedItems.flatMap(entity => state.config.expand ? state.config.expand(entity) : [entity]);
-		const plan = pagePlan.buildPagePlan(items, state.config.page, state.layout);
+		const strips = buildStrips(selectedItems);
+		const plan = pagePlan.buildPagePlan(strips, state.config.page, state.layout);
 		const sheetCount = plan.reduce((count, entry) => Math.max(count, entry.sheetIndex), 0);
 		const screen = $("screen-pages");
 		const print = $("print-area");
 		screen.innerHTML = "";
 		print.innerHTML = "";
+		const buckets = describeBuckets(plan);
+		const seenBuckets = new Set();
+		const showHeadings = state.contentMode === "overflow";
 		plan.forEach(entry => {
+			if (showHeadings && !seenBuckets.has(entry.bucket)) {
+				seenBuckets.add(entry.bucket);
+				const heading = document.createElement("h2");
+				heading.className = "bucket-heading";
+				heading.textContent = bucketHeading(buckets.get(entry.bucket), entry.bucket, sheetCount);
+				screen.appendChild(heading);
+			}
 			const label = document.createElement("div");
 			label.className = "page-label";
 			label.textContent = `Sheet ${entry.sheetIndex} of ${sheetCount} - ${entry.side === "back" ? "Backs" : "Fronts"}`;
@@ -160,22 +245,23 @@
 			const printPage = document.createElement("div");
 			printPage.className = "page";
 			applyPageLayout(printPage);
-			entry.cards.forEach((entity, position) => {
+			entry.cells.forEach(cell => {
 				const screenCard = document.createElement("div");
-				screenCard.className = `screen-card${entity ? "" : " empty"}`;
-				screenCard.innerHTML = entity ? state.config.render(entry.side, entity) : "";
+				screenCard.className = `screen-card${cell ? "" : " empty"}`;
+				applyGuides(screenCard, cell);
+				screenCard.innerHTML = cellHtml(entry.side, cell);
 				screenPage.appendChild(screenCard);
 				const printCard = document.createElement("div");
-				printCard.className = `card${entity ? "" : " empty"}`;
-				if ((position + 1) % state.config.page.columns === 0) printCard.style.borderRight = "0";
-				if (position >= (state.config.page.rows - 1) * state.config.page.columns) printCard.style.borderBottom = "0";
-				printCard.innerHTML = entity ? state.config.render(entry.side, entity) : "";
+				printCard.className = `card${cell ? "" : " empty"}`;
+				applyGuides(printCard, cell);
+				printCard.innerHTML = cellHtml(entry.side, cell);
 				printPage.appendChild(printCard);
 			});
 			screen.appendChild(screenPage);
 			print.appendChild(printPage);
 		});
 		updateLayoutButtons();
+		updateContentButtons();
 		$("placeholder").hidden = true;
 		screen.hidden = false;
 		$("print-actions").hidden = false;
@@ -202,6 +288,7 @@
 		document.body.classList.remove("no-bg-graphics");
 		state.layout = "fronts";
 		updateLayoutButtons();
+		updateContentButtons();
 	}
 
 	function updateDebugButtons () {
@@ -334,6 +421,8 @@
 
 	function start (config) {
 		state.config = { ...config, page: { rows: 2, columns: 4, orientation: "landscape", ...config.page } };
+		state.contentMode = state.config.defaultContentMode || "single";
+		state.layout = "fronts";
 		document.body.classList.toggle("page-portrait", state.config.page.orientation === "portrait");
 		$("entity-label").textContent = config.entityLabel;
 		$("page-title").textContent = config.title;
@@ -352,12 +441,20 @@
 			updateLayoutButtons();
 			buildPreview();
 		});
+		$("content-group")?.addEventListener("click", event => {
+			const button = event.target.closest("[data-content]");
+			if (!button) return;
+			state.contentMode = button.dataset.content;
+			updateContentButtons();
+			if (state.selected.size) buildPreview();
+		});
 		$("debug-print").addEventListener("click", togglePrintDebug);
 		$("btn-exit-debug").addEventListener("click", togglePrintDebug);
 		$("btn-toggle-bg").addEventListener("click", toggleBgGraphics);
 		$("print-cards").addEventListener("click", () => window.print());
 		$("save-book").addEventListener("click", saveBook);
 		updateLayoutButtons();
+		updateContentButtons();
 		$("overlay-text").textContent = `Loading ${config.entityLabel.toLowerCase()}...`;
 		load().then(() => { buildFilters(); filter(); $("overlay").hidden = true; }).catch(error => { $("overlay-text").textContent = `Unable to load ${config.entityLabel.toLowerCase()}: ${error.message}`; });
 	}

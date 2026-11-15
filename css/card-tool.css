@@ -380,6 +380,23 @@ button {
     margin: 0 0 .5rem
 }
 
+.bucket-heading {
+    text-align: center;
+    color: var(--gold);
+    font: 700 .8rem 'Cinzel', serif;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    margin: 1.6rem 0 .55rem
+}
+
+.bucket-heading:first-child {
+    margin-top: 0
+}
+
+.bucket-heading+.page-label {
+    margin-top: -.15rem
+}
+
 .screen-page,
 .page {
     display: grid;
@@ -399,9 +416,48 @@ button {
 .screen-card,
 .card {
     overflow: hidden;
-    border: 1px solid #e0d8c0;
     background: var(--paper);
     color: var(--ink)
+}
+
+.screen-card.empty {
+    background: #f7f4ec
+}
+
+.card.empty {
+    background: white
+}
+
+.screen-card[data-guide-right="cut"] {
+    border-right: 1px solid #c9c0a8
+}
+
+.screen-card[data-guide-right="fold"] {
+    border-right: 1px dashed #b9ad91
+}
+
+.screen-card[data-guide-bottom="fold"] {
+    border-bottom: 1px dashed #b9ad91
+}
+
+.screen-card[data-guide-bottom="cut"] {
+    border-bottom: 1px solid #c9c0a8
+}
+
+.card[data-guide-right="cut"] {
+    border-right: .15mm solid #777
+}
+
+.card[data-guide-right="fold"] {
+    border-right: .15mm dashed #777
+}
+
+.card[data-guide-bottom="cut"] {
+    border-bottom: .15mm solid #777
+}
+
+.card[data-guide-bottom="fold"] {
+    border-bottom: .15mm dashed #777
 }
 
 .card-inner {
@@ -662,7 +718,6 @@ body.print-debug .page {
     grid-template-columns: repeat(var(--page-columns), calc(var(--page-width) / var(--page-columns)));
     grid-template-rows: repeat(var(--page-rows), calc(var(--page-height) / var(--page-rows)));
     overflow: hidden;
-    outline: .15mm dashed #777;
     margin-bottom: 8mm
 }
 
@@ -672,17 +727,7 @@ body.print-debug .card {
     overflow: hidden;
     display: flex;
     flex-direction: column;
-    background: white;
-    border-right: .15mm dashed #777;
-    border-bottom: .15mm dashed #777
-}
-
-body.print-debug .page>.card:nth-child(var(--page-columns)n) {
-    border-right: none
-}
-
-body.print-debug .page>.card:nth-child(n + 5) {
-    border-bottom: none
+    background: white
 }
 
 body.print-debug .card-inner {
@@ -792,9 +837,7 @@ body.print-debug #print-debug-bar {
 
     .card {
         width: calc(var(--page-width) / var(--page-columns));
-        height: calc(var(--page-height) / var(--page-rows));
-        border-right: .15mm dashed #777;
-        border-bottom: .15mm dashed #777
+        height: calc(var(--page-height) / var(--page-rows))
     }
 
     .card-inner {

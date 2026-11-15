@@ -6,7 +6,7 @@ The shared engine in `js/card-tool.js` powers the standalone card pages used thr
 
 The 5etools source is a git submodule at `5etools/`, pinned to `d2a2616867` (`v2.25.4`). The card tool reads its data from `5etools/data/`; all card-tool code, styles, tests, and back-card assets live in this repository. Do not modify the submodule.
 
-The shell is a fixed layout with a top bar, filter sidebar, selected-item tray, and preview area. The hidden `#print-area` contains print-ready pages; `#screen-pages` contains the screen preview. The DOM-free `js/card-tool-pages.js` module owns chunking, final-page padding, per-row back mirroring, and front/back pair ordering. The loading overlay remains visible until the page-specific setup completes.
+The shell is a fixed layout with a top bar, filter sidebar, selected-item tray, and preview area. The hidden `#print-area` contains print-ready pages; `#screen-pages` contains the screen preview. The DOM-free `js/card-tool-pages.js` module owns strip bucketing, sheet packing, final-sheet padding, per-row back mirroring, per-panel back roles, cut/fold guide roles, and front/back pair ordering. The loading overlay remains visible until the page-specific setup completes.
 
 ## User Flow
 
@@ -16,8 +16,10 @@ The shell is a fixed layout with a top bar, filter sidebar, selected-item tray, 
 4. `filter()` applies search, chips, and sort order.
 5. `renderList()` creates selectable rows from `filtered`.
 6. `toggle()`, `selectVisible()`, and `clearSelection()` mutate the `selected` map.
-7. `buildPreview()` builds one page plan from the selected entities and creates matching screen/print markup for the active layout.
+7. `buildPreview()` converts each selected entity into a strip descriptor, builds one page plan from those strips, and creates matching screen/print markup for the active layout.
 8. `Print` calls `window.print()` for the active Fronts, Backs, or Both layout; `Debug Print` renders the same `#print-area` pages.
+
+A page can supply a `flow(entity, context)` adapter. When it does, `buildPreview()` uses the returned strip directly; otherwise it falls back to one single-panel strip per entity, expanding with `config.expand` first when that hook exists. Panel HTML comes from the strip, back art comes from `render("back", strip.entity)`, and `page` back cells reuse the strip panel named by `panelIndex`. This keeps front and back markup, guides, and bucket headings derived from one plan.
 
 The list is filtered independently from selection, so changing filters does not remove already selected cards. Sorting affects both the visible list and selected-card page order.
 
@@ -28,6 +30,7 @@ The list is filtered independently from selection, so changing filters does not 
 - `selected`: `Map` keyed by `${type}|${name}|${source}` and storing selected card data.
 - `config`: page-specific metadata such as title, files, filters, sort rules, and page geometry.
 - `layout`: active preview and print layout, `fronts`, `backs`, or `both`; resets to `fronts` when the preview closes.
+- `contentMode`: active content mode, `single` or `overflow`; starts from the page type's default and survives a selection clear.
 - `zoom`: screen-only zoom, clamped to 50%-200%.
 - `currentBookName`: current saved/imported cardbook label when applicable.
 
