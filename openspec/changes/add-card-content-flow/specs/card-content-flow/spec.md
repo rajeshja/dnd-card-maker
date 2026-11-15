@@ -129,31 +129,41 @@ When content exceeds the next construction, the tool SHALL first reduce the cont
 - **THEN** the tool uses five pages at the default size
 - **AND** it does not reduce the font to fit four pages
 
-### Requirement: Overflow content is bucketed by span
+### Requirement: Overflow cards are ordered by span bucket
 
-Under Overflow mode the tool SHALL order cards into span buckets 1, 2, 3, 4, and 5, followed by a truncated bucket. Each bucket SHALL preserve the active sort order, SHALL start on a fresh sheet, and empty buckets SHALL be skipped.
+Under Overflow mode the tool SHALL order cards into span buckets 1, 2, 3, 4, and 5, followed by a truncated bucket. Each bucket SHALL preserve the active sort order, and empty buckets SHALL be skipped.
 
 #### Scenario: Mixed spans order by bucket
 
 - **WHEN** the selection contains cards of spans 1, 2, 3, 4, and 5
 - **THEN** the document prints span 1 cards first, then span 2, then span 3, then span 4, then span 5
 
-#### Scenario: Each bucket starts a new sheet
-
-- **WHEN** a span bucket ends partway through a sheet
-- **THEN** the next populated bucket starts on a new sheet
-- **AND** the partially filled sheet keeps empty positions
-
-#### Scenario: Both layout pairs bucket sheets
-
-- **WHEN** the Both layout is active
-- **THEN** each bucket's first sheet is a front and back pair
-- **AND** no bucket shares a sheet with another bucket
-
 #### Scenario: Active sort applies within a bucket
 
 - **WHEN** the user changes the sort order
 - **THEN** cards reorder within each bucket without changing bucket order
+
+### Requirement: Sheets are packed by strip width
+
+The tool SHALL pack strips into sheets by strip width rather than by span bucket: width-1 strips occupy their own sheets, width-2 strips (spans 2 and 3) share sheets, and width-4 strips (spans 4 and 5) share sheets. Each width class SHALL start on a fresh sheet, a span bucket SHALL NOT start a fresh sheet when the preceding bucket has the same strip width, and truncated cards SHALL keep their own class after every fitting card.
+
+#### Scenario: Same-width buckets share a sheet
+
+- **WHEN** a span 2 bucket ends partway through a sheet and span 3 cards follow
+- **THEN** the span 3 cards continue on that sheet
+- **AND** the sheet keeps any empty positions after the last card
+
+#### Scenario: A width change starts a new sheet
+
+- **WHEN** a span 3 bucket ends partway through a sheet and span 4 cards follow
+- **THEN** the span 4 cards start on a new sheet
+- **AND** the partially filled sheet keeps its empty positions
+
+#### Scenario: Both layout pairs class sheets
+
+- **WHEN** the Both layout is active
+- **THEN** every sheet's front page is immediately followed by its own back page
+- **AND** no sheet mixes strips of different widths
 
 ### Requirement: Over-cap content truncates last
 

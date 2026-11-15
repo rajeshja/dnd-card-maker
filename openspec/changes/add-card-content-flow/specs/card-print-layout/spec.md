@@ -4,7 +4,7 @@
 
 ### Requirement: Interleaved page order
 
-Under the Both layout, the tool SHALL emit the front page of a sheet followed immediately by the back page of that same sheet, repeated for every sheet in document order. The two pages of a pair SHALL contain the same panels in corresponding positions. Sheets SHALL be grouped by span bucket, so no sheet carries panels from two buckets, and a bucket SHALL begin on a new sheet.
+Under the Both layout, the tool SHALL emit the front page of a sheet followed immediately by the back page of that same sheet, repeated for every sheet in document order. The two pages of a pair SHALL contain the same panels in corresponding positions. Sheets SHALL be grouped by strip width, so every strip on a sheet occupies the same number of columns, and each width class SHALL begin on a new sheet.
 
 #### Scenario: Multiple chunks alternate
 
@@ -23,16 +23,17 @@ Under the Both layout, the tool SHALL emit the front page of a sheet followed im
 - **THEN** both the front and the back page leave that position empty
 - **AND** no card art or text appears there
 
-#### Scenario: Bucket boundary starts a new pair
+#### Scenario: Width boundary starts a new pair
 
-- **WHEN** a span bucket ends partway through its last sheet and another bucket follows
-- **THEN** the next bucket starts on a new front page paired with its own back page
+- **WHEN** a width class ends partway through its last sheet and another class follows
+- **THEN** the next class starts on a new front page paired with its own back page
 - **AND** the partially filled sheet keeps its empty positions
 
-#### Scenario: Pages never mix buckets
+#### Scenario: Pages never mix widths
 
-- **WHEN** several span buckets exist
-- **THEN** every printed page contains panels from exactly one bucket
+- **WHEN** strips of different widths are selected
+- **THEN** every printed page contains strips of exactly one width
+- **AND** consecutive span buckets of the same width may share a page
 
 ### Requirement: Back pages mirror each row
 
@@ -108,7 +109,7 @@ The print output SHALL draw a solid cut guide at every boundary between separate
 
 ### Requirement: Preview bucket headings
 
-Under Overflow mode the on-screen preview SHALL show a heading before the first sheet of each populated bucket, naming the bucket and its sheet range. These headings SHALL NOT appear in the print document or in Debug Print.
+Under Overflow mode the on-screen preview SHALL show a heading before the first sheet on which each populated bucket appears, naming the bucket, its card count, and the sheets its cards occupy. A bucket that begins partway through a sheet shared with a previous bucket SHALL still get its heading at that sheet, and when two buckets begin on the same sheet the preview SHALL show both headings above that sheet in bucket order. These headings SHALL NOT appear in the print document or in Debug Print.
 
 #### Scenario: Headings in overflow preview
 
@@ -116,6 +117,18 @@ Under Overflow mode the on-screen preview SHALL show a heading before the first 
 - **THEN** the preview shows a heading before the first span 1 sheet
 - **AND** a heading before the first span 2 sheet
 - **AND** each heading states the bucket's card count and sheet range
+
+#### Scenario: Heading for a bucket that begins mid-sheet
+
+- **WHEN** a span 2 bucket ends partway through a sheet and span 3 cards begin on that same sheet
+- **THEN** the preview shows the span 2 heading and then the span 3 heading above that sheet
+- **AND** the span 3 heading's sheet range begins at that sheet
+
+#### Scenario: Shared sheet ranges overlap
+
+- **WHEN** two buckets share a sheet
+- **THEN** each heading states only its own card count and the sheets its own cards occupy
+- **AND** the two sheet ranges overlap on the shared sheet
 
 #### Scenario: Headings stay out of print
 

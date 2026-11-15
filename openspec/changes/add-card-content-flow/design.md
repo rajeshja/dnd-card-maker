@@ -54,18 +54,22 @@ Panel fragments carry rendered HTML rather than entity references, because overf
 
 *Alternative considered:* keep the flat entity list and add a `pages` array to each entity, expanding entities per panel as beasts do today. Rejected: a flat list cannot express that panels 1 and 2 belong to one physical strip, which is exactly what backs, guides, and packing key off.
 
-### D2. Bucketing and packing stay pure and DOM-free
+### D2. Packing is by width class; buckets keep span order
 
 `buildPagePlan(strips, page, layout)` in `js/card-tool-pages.js`:
 
-1. Input strips are already grouped by bucket in document order (`1, 2, 3, 4, 5, truncated`) and ordered by the active sort inside each bucket. The packer does not sort.
-2. Per bucket, `stripsPerSheet = floor(columns / width) * rows`, so 4x2 gives 8 / 4 / 4 / 2 / 2 and 2x2 gives 4 / 2 / 2 for widths 1 / 2 / 4 (4-column pages only).
-3. Chunk the bucket into sheets, pad the final sheet with `null` cells, and start the next bucket at a new sheet.
-4. `sheetIndex` runs continuously across buckets; it is the printed sheet number.
+1. Input strips are already grouped by span bucket in document order (`1, 2, 3, 4, 5, truncated`) and ordered by the active sort inside each bucket. The packer does not sort.
+2. Each strip joins a packing class derived from its geometry, not its span: `width: 1`, `width: 2`, `width: 4`, and a separate `truncated` class. Spans 2 and 3 are both width 2; spans 4 and 5 are both width 4. Truncated strips are width 4 on a 4-column page but stay in their own class so over-cap cards remain the last, skippable group.
+3. Each class starts on a fresh sheet and is chunked row-major with `stripsPerSheet = floor(columns / width) * rows`, so a 4x2 page gives 8 / 4 / 2 and a 2x2 page gives 4 / 2.
+4. `sheetIndex` runs continuously across classes; it is the printed sheet number.
 
-Output entries: `{side, sheetIndex, bucket, cells[]}` where each cell is either `null` (padding) or `{strip, panelIndex, back, guides}`.
+Output entries: `{side, sheetIndex, buckets[], cells[]}` where `buckets` lists the distinct span buckets present on the sheet in front-cell order (structural input for headings, not copy), and each cell is either `null` (padding) or `{strip, panelIndex, back, guides}`.
 
-*Alternative considered:* keep greedy chunking and align by computing "first free column". Rejected: with fresh-sheet buckets every sheet in a bucket has identical geometry, so the row-major chunk above is both simpler and provably correct.
+Because a class is homogeneous, every sheet in it has identical cut geometry: the same fold positions inside each strip, the same cuts between strips and rows. A stack of those sheets still cuts as one guillotine pass, which is what makes the grouping worth having.
+
+*Alternative considered:* keep one class per span. Rejected: span 2 and span 3 produce the same width-2 strip, so a fresh sheet at every span boundary adds paper without adding cut geometry — five 2-page cards plus two 3-page cards need three sheets instead of two.
+
+*Alternative considered:* fill rows greedily across classes so only the final sheet is partial. Rejected: a sheet would then hold a width-4 row above a width-2 row, which is still cuttable but forces a horizontal cut per sheet before any row can be trimmed, giving up stack-and-guillotine cutting for the run. The remaining waste is bounded by one partial sheet per class, at most four on a landscape page and usually fewer because the truncated class is often empty.
 
 ### D3. Back pages derive from front cells by mirroring columns
 
@@ -100,19 +104,30 @@ CSS then renders by attribute:
 
 The blanket dashed rule and the inline `style.borderRight = "0"` / `borderBottom = "0"` clearing in `buildPreview()` are removed.
 
-*Alternative considered:* derive guide type from bucket in CSS with sibling selectors. Rejected: buckets share sheets with no cross-bucket adjacency, but only JS knows whether a neighbour is the same strip; encoding it in the plan keeps one implementation and makes it unit-testable.
+*Alternative considered:* derive guide type from bucket in CSS with sibling selectors. Rejected: two span buckets can now share a sheet, so bucket identity says nothing about whether two neighbours belong to one strip; only the plan knows, and encoding it there keeps one implementation and makes it unit-testable.
 
 ### D5. Bucket headings are built in the preview, not in the plan
 
-`buildPreview()` walks plan entries and, when `entry.bucket` differs from the previous entry's bucket, inserts a heading element before that page in `#screen-pages` only. Label shape:
+Headings follow buckets, not sheets. `buildPreview()` walks plan entries and, for each bucket in `entry.buckets` it has not seen yet, inserts one heading before that page in `#screen-pages` only:
 
-- `1-page cards — 12 cards, sheets 1-2`
+- A bucket gets its heading on the sheet where its first card appears, even when that is partway through a sheet shared with the previous bucket.
+- Two buckets can start on the same sheet; both headings are inserted, in bucket order, above that sheet's page.
+- Under Both, the heading sits before the front page of the sheet; the paired back page gets none because every bucket on it is already seen.
+- Because sheets are homogeneous per width class, only the two transition sheets (span 2 to 3 and span 4 to 5) can carry more than one bucket.
+
+Label shape is unchanged because it is per bucket:
+
+- `2-page cards — 12 cards, sheets 1-2`
 - `Truncated — 1 card, sheets 6 of 9`
 - Both layout appends printed page numbers: `…, pages 11-12`
 
+A bucket's sheet range covers only the sheets its cards appear on, so two headings for a shared sheet overlap on that sheet. That is the honest description of the stack.
+
 Headings are never appended to `#print-area`, so print and Debug Print exclude them without filtering logic.
 
-*Alternative considered:* put heading text in the plan. Rejected: it drags copy and sheet-range formatting into the DOM-free module and would have to be stripped again for print.
+*Alternative considered:* put the heading text itself in the plan. Rejected: it drags copy and sheet-range formatting into the DOM-free module and would have to be stripped again for print. The ordered `buckets` list is structural, and the preview still owns every word.
+
+*Alternative considered:* label by width class (`2-column cards — 7 cards (4 two-page, 3 three-page)`). Rejected: it hides the page count that decides the fold, and it would rewrite heading copy for a saving nobody asked for.
 
 ### D6. Measurement uses a probe page and per-type flow adapters
 
@@ -189,7 +204,7 @@ Beast CSS currently hardcodes several sizes (title, subtitle, abilities, details
 - **Measurement cost on large selections** → Mitigation: ascending span search, short-circuit at the default size, and a per-entity cache keyed by mode and size.
 - **Beast behaviour change** — very long statblocks now truncate instead of expanding indefinitely → Mitigation: ellipsis, truncated bucket last, and documentation; this is an intended breaking change recorded in the proposal.
 - **Guide geometry drifting from the physical cut** → Mitigation: guide roles live only in the packer and are unit-tested; CSS only maps attribute values to line styles.
-- **Paper cost of fresh-sheet buckets** → Accepted: homogeneous stacks are the point; the wasted cells are a deliberate trade for guillotine-friendly output.
+- **Residual paper waste at class boundaries** → Accepted: only the last sheet of each class is partial — one each for width 1, width 2, width 4, and truncated, though the truncated class is usually empty — and every sheet still cuts as one homogeneous stack. Filling leftover rows across classes would recover at most those partial sheets at the cost of a horizontal cut before every row trim.
 - **Blank interior accordion backs may surprise users** → Mitigation: they are visible in the preview before printing and explained in `docs/card-tool-rendering-and-printing.md`.
 - **Heading leakage into print** → Mitigation: headings are appended to `#screen-pages` only, and a test asserts `#print-area` contains no heading element.
 - **Screen/print ellipsis disagreement** → Mitigation: the flow result is computed once per entity and drives both render targets.
