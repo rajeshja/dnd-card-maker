@@ -26,6 +26,14 @@ For a tag such as `{@action Utilize|XPHB}`, the first pipe-delimited segment is 
 
 This is a card-specific compact rendering rule. Do not rewrite the source JSON to remove tags, and do not change the normal item renderer to accommodate the card layout. Keep escaping after formatting so data text cannot become card markup.
 
+## Card Content Units and Truncation
+
+The item card flow in `js/card-tool-content.js` splits flattened item text with `sentenceUnits()`: each sentence is a unit with its own block id, so each sentence renders as a paragraph. The spell adapter uses the same units and appends the material component line as a final `material` unit.
+
+If one item sentence is too long to fit a panel at the default body size, `itemFlow()` explodes that sentence into `wordUnits()` with the same block id. The flow can then fill panels at word boundaries without breaking the paragraph, so a single oversized sentence still flows onto a strip instead of looping or clipping.
+
+Under Single card mode the flow shrinks to the floor and then truncates, marking the last visible block with the `card-ellipsis` marker. Under Overflow mode the flow assigns the smallest strip that fits and puts over-cap content in the final `truncated` bucket. See [card-tool-rendering-and-printing.md](card-tool-rendering-and-printing.md) for the shared ladder and cap rules.
+
 ## Placeholder UI
 
 When no item is selected, `item-cards.html` shows the `#placeholder` element with the message "Select entries to preview cards". `js/card-tool.js` hides that placeholder when `buildPreview()` creates screen and print cards, and restores it when the selection is cleared. This placeholder is UI state, not item data and should not be added to JSON entries.

@@ -8,6 +8,8 @@ The 5etools source is a git submodule at `5etools/`, pinned to `d2a2616867` (`v2
 
 The shell is a fixed layout with a top bar, filter sidebar, selected-item tray, and preview area. The hidden `#print-area` contains print-ready pages; `#screen-pages` contains the screen preview. The DOM-free `js/card-tool-pages.js` module owns strip bucketing, sheet packing, final-sheet padding, per-row back mirroring, per-panel back roles, cut/fold guide roles, and front/back pair ordering. The loading overlay remains visible until the page-specific setup completes.
 
+`js/card-tool-flow.js` is the shared content-flow module: it owns the offscreen page probe, the shrink ladder, panel filling, the ellipsis filler, and the beast section segmenter. `js/card-tool-content.js` holds the spell and item content units, panel templates, and flow adapters. Page scripts keep only data loading, filters, sort rules, back-card art, and page configuration. The flow module also publishes its helpers on `globalThis.CardToolFlow` for `buildPreview()` and `beast-cards.js`, so each page loads it before the page script.
+
 ## User Flow
 
 1. `start(config)` initializes the page-specific card type and shared UI.
@@ -19,7 +21,7 @@ The shell is a fixed layout with a top bar, filter sidebar, selected-item tray, 
 7. `buildPreview()` converts each selected entity into a strip descriptor, builds one page plan from those strips, and creates matching screen/print markup for the active layout.
 8. `Print` calls `window.print()` for the active Fronts, Backs, or Both layout; `Debug Print` renders the same `#print-area` pages.
 
-A page can supply a `flow(entity, context)` adapter. When it does, `buildPreview()` uses the returned strip directly; otherwise it falls back to one single-panel strip per entity, expanding with `config.expand` first when that hook exists. Panel HTML comes from the strip, back art comes from `render("back", strip.entity)`, and `page` back cells reuse the strip panel named by `panelIndex`. This keeps front and back markup, guides, and bucket headings derived from one plan.
+A page can supply a `flow(entity, context)` adapter. When it does, `buildPreview()` creates one measurement probe for the build, passes `mode`, `page`, `maxPanels`, and `measure` in the context, and uses each returned strip directly. It disposes the probe after all strips are built. Without a `flow` hook, `buildPreview()` falls back to one single-panel strip per entity, expanding with `config.expand` first when that legacy hook exists. Panel HTML comes from the strip, back art comes from `render("back", strip.entity)`, and `page` back cells reuse the strip panel named by `panelIndex`. This keeps front and back markup, guides, and bucket headings derived from one plan.
 
 The list is filtered independently from selection, so changing filters does not remove already selected cards. Sorting affects both the visible list and selected-card page order.
 

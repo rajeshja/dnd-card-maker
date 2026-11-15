@@ -34,6 +34,15 @@ The generic filter model is page-specific but consistent:
 
 The list is independent from selection; changing filters does not remove already selected cards.
 
+## Content Mode
+
+The content mode is selection-wide and held only in memory as `state.contentMode`.
+
+- `single`: one panel per card, shrinking to the floor and then truncating with an ellipsis.
+- `overflow`: bounded multi-panel strips in span buckets, with over-cap content truncated into a final bucket.
+
+Each page configuration sets `defaultContentMode`: spells and items use `single`, beasts use `overflow`. The mode is not saved in cardbooks and has no URL state, so a reload restores the page type's default. `hidePreview()` resets only the layout to Fronts, so clearing the selection keeps the current mode.
+
 ## Identity and Selection
 
 Use a stable entity identifier throughout selection, de-duplication, rendering, and persistence. The shared engine uses `${type}|${name}|${source}` and should preserve this even when the page is spell-only or loaded from legacy saved data.

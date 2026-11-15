@@ -2,11 +2,26 @@
 
 ## Front Cards
 
-Each card type has a dedicated front-card renderer. The spell renderer (`cardHTML(spell)`) includes title, school color, level, casting time, range, duration, components, flattened description, and optional material text. `fmtEntries()` recursively handles strings, `entries`, and `list`; it strips simple `{@tag ...}` markup, flattens paragraphs into text, and renders tables as `[Table]`. Item and beast renderers follow their own layout logic without assuming spell fields exist.
+Each card type has a dedicated front-card renderer. Spell and item panels come from `spellPanel()` and `itemPanel()` in `js/card-tool-content.js`; the beast statblock renderer (`beastCard()`) stays in `js/beast-cards.js`. Spell panels include title, school color, casting time, range, duration, components, description blocks, and the optional material line. Item panels include the item meta line and description blocks. Description text is flattened by `js/card-tool-text.js`: `spellText()` strips simple `{@tag ...}` markup, flattens nested entries, and renders tables as `[Table]`; `flattenCardEntries()` does the equivalent for item and beast entries.
 
 ## Back Cards and Assets
 
 Back cards are card-specific as well. Spell backs render school, level, classes, concentration/ritual indicators, and the spell name. Item and beast backs use a simpler label layout with item or beast metadata. All back-card layouts rely on relative asset paths under the project-local `card-images/` directory, and the repository ships the spell-card art set there. Optional item and beast artwork resolves from the project-local `img/` directory, which is not tracked by the repository. If that directory is removed, renamed, or path casing changes, the back preview and print output will show broken image references.
+
+## Content Flow
+
+Each card type registers a `flow(entity, context)` adapter that turns one selected entity into a strip. Spell and item adapters live in `js/card-tool-content.js`; the beast adapter lives in `js/beast-cards.js`. All of them use the shared ladder and filler in `js/card-tool-flow.js` and measure candidate panels with `createMeasure(page)`, an offscreen probe that renders one card at print page geometry and reports whether the content overflows.
+
+The toolbar content control applies one mode to the whole selection:
+
+- **Single card** is the default for spells and items. The adapter tries the type's default body size and steps down in `0.15pt` increments to the shrink floor, which is `max(8.9, defaultPt * 0.9)`. If the content still overflows, the adapter truncates it and ends the last visible block with an ellipsis. Single-mode strips always use bucket `1`, so cards keep the active sort order and never produce bucket headings.
+- **Overflow** is the default for beasts. The adapter searches spans in ascending order up to the page cap: `5` for a 4x2 page, `3` for a 2x2 page. It shrinks only at the `1`, `3`, and `5` boundaries, so spans `2` and `4` are used at the default size only. Content beyond the cap keeps the largest construction, truncates the remainder, ends its last content panel with an ellipsis, and sorts into the final `truncated` bucket.
+
+Spell and item content is split into sentence units keyed by block id, so each sentence renders as its own paragraph and the material component line is the spell's final unit. Items fall back to word-level units inside the same block when one sentence cannot fit even one panel at the default size, and that block still renders as one paragraph. Beast content keeps the section/entry/word fill, so a statblock splits at section then entry boundaries before it reaches word fragments.
+
+Every adapter records the chosen `fontPt` on the strip and writes it to `data-content-pt` on the card inner element. The print and screen fitter starts from that size instead of the type default, so a flow-chosen size is preserved at print time.
+
+Bucket headings are screen-only. Under Overflow, `buildPreview()` writes a heading before the first sheet of each populated bucket with the bucket name, card count, sheet range, and, under Both, printed page numbers. `#print-area` never receives headings.
 
 ## Page Construction and Layouts
 
@@ -42,7 +57,7 @@ The printer must flip the sheet left-to-right for backs to land behind their own
 
 ## Fitting
 
-`fitRenderedCards()` measures screen and print cards after every preview build, reducing titles and body text while preserving readable layout inside each card. Print fitting temporarily applies `#print-area.fit-measure` when print markup is hidden, and Debug Print refits `#print-area` when it opens.
+`fitRenderedCards()` measures screen and print cards after every preview build, reducing titles and body text while preserving readable layout inside each card. Body fitting starts at the card's `data-content-pt` size when the flow adapter set one, so the chosen ladder size is not silently undone. Print fitting temporarily applies `#print-area.fit-measure` when print markup is hidden, and Debug Print refits `#print-area` when it opens. The fitter never grows text above the flow size; the smaller screen preview may shrink a card further when it cannot reproduce the print box at print size.
 
 These values are layout policy, not data; adjust only with preview and print checks.
 
