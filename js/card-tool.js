@@ -192,14 +192,16 @@
 	function describeBuckets (plan) {
 		const buckets = new Map();
 		for (const entry of plan) {
-			let bucket = buckets.get(entry.bucket);
-			if (!bucket) {
-				bucket = {strips: new Set(), sheets: new Set()};
-				buckets.set(entry.bucket, bucket);
-			}
-			bucket.sheets.add(entry.sheetIndex);
-			for (const cell of entry.cells) {
-				if (cell) bucket.strips.add(cell.strip);
+			for (const bucketName of entry.buckets) {
+				let bucket = buckets.get(bucketName);
+				if (!bucket) {
+					bucket = {strips: new Set(), sheets: new Set()};
+					buckets.set(bucketName, bucket);
+				}
+				bucket.sheets.add(entry.sheetIndex);
+				for (const cell of entry.cells) {
+					if (cell && (cell.strip.bucket ?? "1") === bucketName) bucket.strips.add(cell.strip);
+				}
 			}
 		}
 		return buckets;
@@ -232,14 +234,13 @@
 		screen.innerHTML = "";
 		print.innerHTML = "";
 		const buckets = describeBuckets(plan);
-		const seenBuckets = new Set();
 		const showHeadings = state.contentMode === "overflow";
-		plan.forEach(entry => {
-			if (showHeadings && !seenBuckets.has(entry.bucket)) {
-				seenBuckets.add(entry.bucket);
+		const headingSlots = showHeadings ? pagePlan.bucketHeadingSlots(plan) : [];
+		plan.forEach((entry, index) => {
+			for (const bucketName of headingSlots[index] ?? []) {
 				const heading = document.createElement("h2");
 				heading.className = "bucket-heading";
-				heading.textContent = bucketHeading(buckets.get(entry.bucket), entry.bucket, sheetCount);
+				heading.textContent = bucketHeading(buckets.get(bucketName), bucketName, sheetCount);
 				screen.appendChild(heading);
 			}
 			const label = document.createElement("div");

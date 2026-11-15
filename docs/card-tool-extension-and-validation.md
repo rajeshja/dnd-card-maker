@@ -24,7 +24,7 @@ Reuse those schemas or shared modules only after checking their browser-loading 
 
 ## Validation Checklist
 
-`npm test` runs the card-tool unit tests in `test/`: filter helpers, entry text flattening, the DOM-free page plan, and the content flow. The page-plan tests cover strip bucketing, strips per sheet on 4x2 and 2x2 grids, final-sheet padding, per-panel back roles, cut/fold guides, and Both interleaving. The flow tests cover the shrink ladder branches, boundary-only shrinking, the page cap, ellipsis filling, and beast section segmentation. The content tests cover spell and item units, continuation panels, oversized-sentence word fallback, escaping, and single-mode truncation. The inline page JavaScript and print layout still require browser checks.
+`npm test` runs the card-tool unit tests in `test/`: filter helpers, entry text flattening, the DOM-free page plan, and the content flow. The page-plan tests cover strip bucketing, width-class packing and strips per sheet on 4x2 and 2x2 grids, shared sheets across consecutive same-width buckets, final-sheet padding, per-panel back roles, cut/fold guides, and Both interleaving. The flow tests cover the shrink ladder branches, boundary-only shrinking, the page cap, ellipsis filling, and beast section segmentation. The content tests cover spell and item units, continuation panels, oversized-sentence word fallback, escaping, and single-mode truncation. The inline page JavaScript and print layout still require browser checks.
 
 For changes, manually verify:
 
@@ -32,7 +32,7 @@ For changes, manually verify:
 - search, every filter group, sorting, select-visible, remove, and clear for each page type;
 - long titles, long descriptions, tables, missing optional fields, and page-specific edge cases;
 - both content modes: defaults per type, mode switch rebuilding the selection, truncation ellipses, and no headings in Single card mode;
-- overflow bucket headings, bucket order, fresh sheets per bucket, and the `truncated` bucket last;
+- overflow bucket headings, bucket order, same-width buckets sharing a sheet, fresh sheets on a width change, and the `truncated` bucket last;
 - saved books, Add/Replace, malformed JSON, unmatched sources, and export/import round trips;
 - Fronts, Backs, and Both previews, including paired sheet labels, cut/fold guides, blank interior accordion backs, page-3 and page-5 continuation backs, final-sheet padding, reset-to-Fronts on clear, zoom, and console cleanliness;
 - Debug Print under each layout matches the preview page sequence and sides, plus A4 Print Preview;

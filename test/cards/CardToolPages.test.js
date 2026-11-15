@@ -1,4 +1,4 @@
-import {buildPagePlan} from "../../js/card-tool-pages.js";
+import {buildPagePlan, bucketHeadingSlots} from "../../js/card-tool-pages.js";
 
 const LANDSCAPE = {rows: 2, columns: 4};
 const PORTRAIT = {rows: 2, columns: 2};
@@ -42,7 +42,7 @@ describe("buildPagePlan", () => {
 		expect(plan).toHaveLength(1);
 		expect(plan[0].side).toBe("front");
 		expect(plan[0].sheetIndex).toBe(1);
-		expect(plan[0].bucket).toBe("1");
+		expect(plan[0].buckets).toEqual(["1"]);
 		expect(plan[0].cells).toHaveLength(8);
 		expect(occupied(plan[0])).toHaveLength(1);
 		expect(plan[0].cells[0]).toMatchObject({panelIndex: 0, back: null});
@@ -77,7 +77,7 @@ describe("buildPagePlan", () => {
 		expect(plan.every(entry => entry.cells.length === 4)).toBe(true);
 	});
 
-	it("orders buckets and starts each bucket on a fresh sheet", () => {
+	it("packs strips by width class, continuing span 2 into span 3 on the same sheet", () => {
 		const strips = [
 			strip("Five", {span: 5}),
 			strip("One", {span: 1}),
@@ -86,9 +86,59 @@ describe("buildPagePlan", () => {
 		];
 		const plan = buildPagePlan(strips, LANDSCAPE, "fronts");
 
-		expect(plan.map(entry => entry.bucket)).toEqual(["1", "2", "3", "5"]);
+		expect(plan.map(entry => entry.buckets)).toEqual([["1"], ["2", "3"], ["5"]]);
+		expect(plan.map(entry => entry.sheetIndex)).toEqual([1, 2, 3]);
+		expect(plan.map(entry => uniqueStripNames(entry))).toEqual([["One"], ["Two", "Three"], ["Five"]]);
+	});
+
+	it("packs 8, 4, and 2 strips per 4x2 sheet by width", () => {
+		const strips = [
+			...Array.from({length: 8}, (_, index) => strip(`One ${index}`, {span: 1})),
+			...Array.from({length: 4}, (_, index) => strip(`Two ${index}`, {span: 2})),
+			...Array.from({length: 4}, (_, index) => strip(`Three ${index}`, {span: 3})),
+			...Array.from({length: 2}, (_, index) => strip(`Four ${index}`, {span: 4})),
+		];
+		const plan = buildPagePlan(strips, LANDSCAPE, "fronts");
+
+		expect(plan.map(entry => uniqueStrips(entry))).toEqual([8, 4, 4, 2]);
+		expect(plan.map(entry => entry.buckets)).toEqual([["1"], ["2"], ["3"], ["4"]]);
 		expect(plan.map(entry => entry.sheetIndex)).toEqual([1, 2, 3, 4]);
-		expect(plan.map(entry => uniqueStripNames(entry))).toEqual([["One"], ["Two"], ["Three"], ["Five"]]);
+	});
+
+	it("packs 4 and 2 strips per 2x2 sheet by width", () => {
+		const strips = [
+			...Array.from({length: 4}, (_, index) => strip(`One ${index}`, {span: 1})),
+			...Array.from({length: 2}, (_, index) => strip(`Two ${index}`, {span: 2})),
+			...Array.from({length: 2}, (_, index) => strip(`Three ${index}`, {span: 3})),
+		];
+		const plan = buildPagePlan(strips, PORTRAIT, "fronts");
+
+		expect(plan.map(entry => uniqueStrips(entry))).toEqual([4, 2, 2]);
+		expect(plan.map(entry => entry.buckets)).toEqual([["1"], ["2"], ["3"]]);
+	});
+
+	it("starts a new sheet when the strip width changes", () => {
+		const strips = [strip("A", {span: 3}), strip("B", {span: 4})];
+		const plan = buildPagePlan(strips, LANDSCAPE, "fronts");
+
+		expect(plan.map(entry => entry.buckets)).toEqual([["3"], ["4"]]);
+		expect(plan.map(entry => entry.sheetIndex)).toEqual([1, 2]);
+		expect(plan[0].cells.filter(Boolean)).toHaveLength(2);
+		expect(plan[0].cells.slice(2)).toEqual(new Array(6).fill(null));
+	});
+
+	it("reports both buckets in document order when a sheet ends one and starts the next", () => {
+		const strips = [
+			...Array.from({length: 3}, (_, index) => strip(`Two ${index}`, {span: 2})),
+			...Array.from({length: 2}, (_, index) => strip(`Three ${index}`, {span: 3})),
+		];
+		const plan = buildPagePlan(strips, LANDSCAPE, "fronts");
+
+		expect(plan).toHaveLength(2);
+		expect(plan[0].buckets).toEqual(["2", "3"]);
+		expect(uniqueStripNames(plan[0])).toEqual(["Two 0", "Two 1", "Two 2", "Three 0"]);
+		expect(plan[1].buckets).toEqual(["3"]);
+		expect(uniqueStripNames(plan[1])).toEqual(["Three 1"]);
 	});
 
 	it("keeps sheet indexes continuous across multi-sheet buckets", () => {
@@ -99,8 +149,20 @@ describe("buildPagePlan", () => {
 		];
 		const plan = buildPagePlan(strips, LANDSCAPE, "fronts");
 
-		expect(plan.map(entry => entry.bucket)).toEqual(["1", "1", "2", "truncated"]);
+		expect(plan.map(entry => entry.buckets)).toEqual([["1"], ["1"], ["2"], ["truncated"]]);
 		expect(plan.map(entry => entry.sheetIndex)).toEqual([1, 2, 3, 4]);
+	});
+
+	it("keeps single-mode truncated cards in bucket 1 and in sort order", () => {
+		const strips = [
+			strip("Long", {span: 1, bucket: "1", truncated: true}),
+			strip("Short", {span: 1, bucket: "1"}),
+		];
+		const plan = buildPagePlan(strips, LANDSCAPE, "fronts");
+
+		expect(plan).toHaveLength(1);
+		expect(plan[0].buckets).toEqual(["1"]);
+		expect(cellNames(plan[0]).slice(0, 2)).toEqual(["Long", "Short"]);
 	});
 
 	it("pads the last sheet of a bucket without starting another bucket on it", () => {
@@ -126,7 +188,7 @@ describe("buildPagePlan", () => {
 
 		expect(plan.map(entry => entry.side)).toEqual(["front", "back"]);
 		expect(plan.map(entry => entry.sheetIndex)).toEqual([1, 1]);
-		expect(plan.map(entry => entry.bucket)).toEqual(["1", "1"]);
+		expect(plan.map(entry => entry.buckets)).toEqual([["1"], ["1"]]);
 	});
 
 	it("mirrors each row of a 4x2 back page", () => {
@@ -264,5 +326,40 @@ describe("buildPagePlan", () => {
 		expect(plan).toHaveLength(1);
 		expect(plan[0].side).toBe("front");
 		expect(cellNames(plan[0])).toEqual(["A", "B", null, null, null, null, null, null]);
+	});
+});
+
+describe("bucketHeadingSlots", () => {
+	const sharedSheet = layout => buildPagePlan([
+		...Array.from({length: 3}, (_, index) => strip(`Two ${index}`, {span: 2})),
+		...Array.from({length: 2}, (_, index) => strip(`Three ${index}`, {span: 3})),
+	], LANDSCAPE, layout);
+
+	it("emits both headings on a shared sheet in bucket order", () => {
+		expect(bucketHeadingSlots(sharedSheet("fronts"))).toEqual([["2", "3"], []]);
+	});
+
+	it("emits each heading once under Both and never on the paired back page", () => {
+		const plan = sharedSheet("both");
+
+		expect(plan.map(entry => entry.side)).toEqual(["front", "back", "front", "back"]);
+		expect(bucketHeadingSlots(plan)).toEqual([["2", "3"], [], [], []]);
+	});
+
+	it("emits the shared-sheet headings once under Backs", () => {
+		const plan = sharedSheet("backs");
+
+		expect(plan.map(entry => entry.side)).toEqual(["back", "back"]);
+		expect(bucketHeadingSlots(plan)).toEqual([["2", "3"], []]);
+	});
+
+	it("emits one heading for a bucket spanning multiple sheets", () => {
+		const plan = buildPagePlan(
+			Array.from({length: 10}, (_, index) => strip(`One ${index}`, {span: 1})),
+			LANDSCAPE,
+			"fronts",
+		);
+
+		expect(bucketHeadingSlots(plan)).toEqual([["1"], []]);
 	});
 });
