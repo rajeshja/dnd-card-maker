@@ -52,10 +52,14 @@
         </aside>
         <main id="main">
             <div id="selection-tray">
-                <span id="selection-status"><strong id="selection-count">0</strong> selected</span>
+                <span id="selection-status"><strong id="selection-count">0</strong><span class="selection-label"> selected</span></span>
                 <span id="preview-mode-group" class="layout-group" role="group" aria-label="Preview mode"><button
                         class="layout-seg" type="button" data-preview="cards" aria-pressed="false">Cards</button><button
                         class="layout-seg" type="button" data-preview="pages" aria-pressed="true">Pages</button></span>
+                <span id="inspection-side-group" class="layout-group" role="group" aria-label="Inspection side"
+                    hidden><button class="layout-seg" type="button" data-inspect-side="front"
+                        aria-pressed="true">Fronts</button><button class="layout-seg" type="button"
+                        data-inspect-side="back" aria-pressed="false">Backs</button></span>
                 <button id="manage-selection" class="btn" type="button">Manage</button>
             </div>
             <div id="preview-wrap">

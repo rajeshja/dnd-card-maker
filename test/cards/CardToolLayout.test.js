@@ -2,10 +2,12 @@ import {
 	CARD_WIDTH_FLOOR,
 	MM_TO_PX,
 	PAGE_GEOMETRY,
+	cardSequence,
 	computePreviewGrid,
 	detailSequence,
 	filterSelection,
 	galleryGroups,
+	printOrderMatchesInspection,
 	selectionMatches,
 } from "../../js/card-tool-layout.js";
 import {buildPagePlan} from "../../js/card-tool-pages.js";
@@ -226,8 +228,8 @@ describe("computePreviewGrid Both pairing", () => {
 describe("galleryGroups", () => {
 	it("groups front tiles by sheet in plan order", () => {
 		const strips = Array.from({length: 10}, (_, index) => strip(`Card ${index}`));
-		const plan = buildPagePlan(strips, LANDSCAPE, "fronts");
-		const groups = galleryGroups(plan, "fronts");
+		const plan = buildPagePlan(strips, LANDSCAPE, "both");
+		const groups = galleryGroups(plan, "front");
 
 		expect(groups).toHaveLength(2);
 		expect(groups.map(group => group.sheetIndex)).toEqual([1, 2]);
@@ -238,8 +240,8 @@ describe("galleryGroups", () => {
 	});
 
 	it("omits empty padding positions", () => {
-		const plan = buildPagePlan([strip("Only")], LANDSCAPE, "fronts");
-		const groups = galleryGroups(plan, "fronts");
+		const plan = buildPagePlan([strip("Only")], LANDSCAPE, "both");
+		const groups = galleryGroups(plan, "front");
 
 		expect(groups).toHaveLength(1);
 		expect(groups[0].tiles).toHaveLength(1);
@@ -247,8 +249,8 @@ describe("galleryGroups", () => {
 	});
 
 	it("shows a multi-panel logical card once with its panel count", () => {
-		const plan = buildPagePlan([strip("Triple", {span: 3}), strip("Single")], PORTRAIT, "fronts");
-		const groups = galleryGroups(plan, "fronts");
+		const plan = buildPagePlan([strip("Triple", {span: 3}), strip("Single")], PORTRAIT, "both");
+		const groups = galleryGroups(plan, "front");
 		const tiles = groups.flatMap(group => group.tiles);
 		const triple = tiles.filter(tile => tile.strip.entity.name === "Triple");
 
@@ -257,81 +259,113 @@ describe("galleryGroups", () => {
 		expect(tiles.map(tile => tile.strip.entity.name)).toEqual(["Single", "Triple"]);
 	});
 
-	it("uses back entries and mirrors their order under Backs", () => {
-		const plan = buildPagePlan([strip("A"), strip("B"), strip("C"), strip("D")], LANDSCAPE, "backs");
-		const groups = galleryGroups(plan, "backs");
+	it("labels back groups with the displayed side", () => {
+		const plan = buildPagePlan([strip("A"), strip("B"), strip("C"), strip("D")], LANDSCAPE, "both");
+		const groups = galleryGroups(plan, "back");
 
 		expect(groups).toHaveLength(1);
 		expect(groups[0].side).toBe("back");
 		expect(groups[0].label).toBe("Backs");
-		expect(groups[0].tiles.map(tile => tile.strip.entity.name)).toEqual(["D", "C", "B", "A"]);
 		expect(groups[0].tiles.every(tile => tile.side === "back")).toBe(true);
+		expect(groups[0].tiles.every(tile => tile.sides.front && tile.sides.back)).toBe(true);
+		expect(groups[0].tiles.every(tile => !("paired" in tile))).toBe(true);
 	});
 
-	it("pairs front and back per sheet without duplicating logical cards under Both", () => {
+	it("keeps card order and sheet grouping when the displayed side changes", () => {
 		const strips = [
 			...Array.from({length: 6}, (_, index) => strip(`One ${index}`)),
 			strip("Triple", {span: 3}),
 		];
 		const plan = buildPagePlan(strips, LANDSCAPE, "both");
-		const groups = galleryGroups(plan, "both");
+		const fronts = galleryGroups(plan, "front");
+		const backs = galleryGroups(plan, "back");
 
-		expect(groups.map(group => group.sheetIndex)).toEqual([1, 2]);
-		expect(groups.map(group => group.side)).toEqual(["both", "both"]);
-		expect(groups.map(group => group.label)).toEqual(["Fronts and Backs", "Fronts and Backs"]);
-		const names = groups.flatMap(group => group.tiles.map(tile => tile.strip.entity.name));
-		expect(new Set(names).size).toBe(names.length);
-		expect(groups[0].tiles).toHaveLength(6);
-		expect(groups[1].tiles).toHaveLength(1);
-		expect(groups[1].tiles[0].panels).toBe(3);
-		expect(groups.every(group => group.tiles.every(tile => tile.sides.front && tile.sides.back))).toBe(true);
+		expect(fronts.map(group => group.sheetIndex)).toEqual(backs.map(group => group.sheetIndex));
+		expect(fronts.map(group => group.tiles.length)).toEqual(backs.map(group => group.tiles.length));
+		expect(fronts.flatMap(group => group.tiles.map(tile => tile.strip)).join())
+			.toBe(backs.flatMap(group => group.tiles.map(tile => tile.strip)).join());
+	});
+
+	it("groups a backs-only plan from its back entries", () => {
+		const plan = buildPagePlan([strip("A"), strip("B"), strip("C"), strip("D")], LANDSCAPE, "backs");
+		const groups = galleryGroups(plan, "back");
+
+		expect(groups).toHaveLength(1);
+		expect(groups[0].label).toBe("Backs");
+		expect(groups[0].tiles.map(tile => tile.strip.entity.name)).toEqual(["D", "C", "B", "A"]);
+	});
+
+	it("shows no tiles for a side the plan does not contain", () => {
+		const plan = buildPagePlan([strip("A"), strip("B")], LANDSCAPE, "fronts");
+
+		expect(galleryGroups(plan, "back")).toEqual([]);
 	});
 });
 
 describe("detailSequence", () => {
-	it("follows the print order of the active layout", () => {
+	it("follows the inspection plan order and records both sides", () => {
 		const strips = [strip("A"), strip("B"), strip("C")];
-		const fronts = buildPagePlan(strips, LANDSCAPE, "fronts");
-		const sequence = detailSequence(fronts, "fronts");
+		const sequence = detailSequence(buildPagePlan(strips, LANDSCAPE, "both"));
 
 		expect(sequence.map(item => item.strip.entity.name)).toEqual(["A", "B", "C"]);
-		expect(sequence.every(item => item.sides.front && !item.sides.back)).toBe(true);
+		expect(sequence.every(item => item.sides.front && item.sides.back)).toBe(true);
 		expect(sequence.map(item => item.sheetIndex)).toEqual([1, 1, 1]);
 	});
 
 	it("deduplicates a multi-panel strip into one navigable card", () => {
-		const plan = buildPagePlan([strip("Triple", {span: 3})], PORTRAIT, "fronts");
-		const sequence = detailSequence(plan, "fronts");
+		const plan = buildPagePlan([strip("Triple", {span: 3})], PORTRAIT, "both");
+		const sequence = detailSequence(plan);
 
 		expect(sequence).toHaveLength(1);
 		expect(sequence[0].panels).toBe(3);
 	});
 
-	it("emits a Backs-only sequence in mirrored print order", () => {
+	it("deduplicates a backs-only plan in its own cell order", () => {
 		const plan = buildPagePlan([strip("A"), strip("B"), strip("C"), strip("D")], LANDSCAPE, "backs");
-		const sequence = detailSequence(plan, "backs");
+		const sequence = detailSequence(plan);
 
 		expect(sequence.map(item => item.strip.entity.name)).toEqual(["D", "C", "B", "A"]);
 		expect(sequence.every(item => item.sides.back && !item.sides.front)).toBe(true);
 	});
 
-	it("offers both sides for one entry per logical card under Both", () => {
+	it("offers one entry per logical card under Both", () => {
 		const strips = Array.from({length: 10}, (_, index) => strip(`Card ${index}`));
-		const plan = buildPagePlan(strips, LANDSCAPE, "both");
-		const sequence = detailSequence(plan, "both");
+		const sequence = detailSequence(buildPagePlan(strips, LANDSCAPE, "both"));
 
 		expect(sequence).toHaveLength(strips.length);
 		expect(new Set(sequence.map(item => item.strip)).size).toBe(strips.length);
-		expect(sequence.every(item => item.sides.front && item.sides.back)).toBe(true);
 		expect(sequence.map(item => item.strip.entity.name)).toEqual(strips.map(item => item.entity.name));
 	});
 
-	it("keeps a stable sequence when the layout changes presentation only", () => {
+	it("keeps a stable sequence when the print layout changes presentation only", () => {
 		const strips = [strip("A"), strip("B")];
-		const fronts = detailSequence(buildPagePlan(strips, LANDSCAPE, "fronts"), "fronts");
-		const both = detailSequence(buildPagePlan(strips, LANDSCAPE, "both"), "both");
+		const fronts = detailSequence(buildPagePlan(strips, LANDSCAPE, "fronts"));
+		const both = detailSequence(buildPagePlan(strips, LANDSCAPE, "both"));
 
 		expect(both.map(item => item.strip.entity.name)).toEqual(fronts.map(item => item.strip.entity.name));
+	});
+});
+
+describe("printOrderMatchesInspection", () => {
+	it("keeps every print layout on the inspection order", () => {
+		const strips = [
+			...Array.from({length: 7}, (_, index) => strip(`One ${index}`)),
+			strip("Double", {span: 2}),
+			strip("Triple", {span: 3}),
+			strip("Quad", {span: 4}),
+		];
+
+		expect(printOrderMatchesInspection(strips, LANDSCAPE)).toEqual({fronts: true, backs: true, both: true});
+		expect(printOrderMatchesInspection(strips, PORTRAIT)).toEqual({fronts: true, backs: true, both: true});
+	});
+
+	it("compares the inspection sequence against front, back, and both print plans", () => {
+		const strips = [strip("A"), strip("B"), strip("C"), strip("D")];
+
+		expect(cardSequence(buildPagePlan(strips, LANDSCAPE, "both"), LANDSCAPE).map(item => item.strip.entity.name))
+			.toEqual(["A", "B", "C", "D"]);
+		expect(cardSequence(buildPagePlan(strips, LANDSCAPE, "backs"), LANDSCAPE).map(item => item.strip.entity.name))
+			.toEqual(["A", "B", "C", "D"]);
 	});
 });
 

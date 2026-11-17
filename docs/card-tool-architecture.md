@@ -29,7 +29,7 @@ Save and Load open cardbook dialogs from the topbar's book controls. Until `rede
 
 On phone a fixed bottom action bar exposes Browse, Selected, and Print. Browse uses the sidebar as a full-screen sheet; Selected reuses the selection manager; Print opens a sheet that owns the moved `.topbar-actions` node (content mode, layout, density, Print, Debug Print, Save, Load, Clear). Controls are moved, never cloned, so listeners and `aria-pressed` state stay single-instance. Below 900px the preview can switch between Cards and Pages; phone starts in Cards.
 
-The detail view is a full-screen `<dialog>` fed by the same print-card clones as the gallery. It is presentation-only: opening, flipping, zooming, or navigating never writes `#print-area`, selection, layout, content mode, density, or sort order, and its state (`detailIndex`, `detailSide`, pinch zoom) is discarded when it closes.
+The detail view is a full-screen `<dialog>` fed by the same print-card clones as the gallery. It opens on the side the gallery is inspecting, and its flip is offered under every layout whenever the card's other side has been prepared, so inspecting a back never requires changing the print layout. It is presentation-only: opening, flipping, zooming, or navigating never writes `#print-area`, selection, layout, content mode, density, or sort order, and its state (`detailIndex`, `detailSide`, pinch zoom) is discarded when it closes. A side the print plan did not render is recorded on first demand by a detached pass that is fitted, copied into `state.printCards`, and removed before printing.
 
 ## Cardbook Dialogs
 
@@ -51,8 +51,8 @@ The Save dialog owns the name field and all inline status, replacing the old `pr
 5. `renderList()` creates selectable rows from `filtered`.
 6. `toggle()`, `selectVisible()`, and `clearSelection()` mutate the `selected` map.
 7. `updateSelection()` updates the count, browse checkmarks, the optional manager list, and rebuilds or hides the preview.
-8. `buildPreview()` converts each selected entity into a strip descriptor, builds one page plan from those strips, and creates matching screen/print markup for the active layout. Screen markup is grouped into `.page-unit` cells inside `#preview-grid`, with `.sheet-pair` wrappers under Both, and the same pass records each strip's print card elements for the gallery and detail view.
-9. The card gallery and detail view are derived from those print-card clones after fitting, so they never re-render or re-fit card text.
+8. `buildPreview()` converts each selected entity into a strip descriptor, builds the print page plan from those strips, and builds the both-sides inspection plan from the same strips and page config. Screen markup is grouped into `.page-unit` cells inside `#preview-grid`, with `.sheet-pair` wrappers under Both, and the same pass records each strip's print card elements for the gallery and detail view.
+9. The card gallery and detail view are derived from those print-card clones after fitting, so they never re-render or re-fit card text. The gallery reads the inspection plan for the side chosen in the `Fronts | Backs` toggle and records the missing side on first demand; the detail view opens on that side and flips locally.
 10. `Save` opens the Save dialog and writes a typed `5etools-cardbook-v1` envelope under the per-type storage key. `Load` lists the stored books for the current entity type and applies Add or Replace through `updateSelection()`.
 11. `Print` calls `window.print()` for the active Fronts, Backs, or Both layout; `Debug Print` renders the same `#print-area` pages.
 
@@ -68,12 +68,17 @@ The list is filtered independently from selection, so changing filters does not 
 - `config`: page-specific metadata such as title, files, filters, sort rules, and page geometry.
 - `layout`: active preview and print layout, `fronts`, `backs`, or `both`; resets to `fronts` when the preview closes.
 - `contentMode`: active content mode, `single` or `overflow`; starts from the page type's default and survives a selection clear.
-- `plan`: the current page plan from `buildPagePlan()`, used by the preview grid, gallery, and detail view.
-- `printCards`: `Map<strip, {front, back}>` of the print card elements per panel, recorded while building `#print-area`. Under Fronts, a multi-panel card's sheet-back continuation pages are fitted in a record-only pass so the detail view can stack every panel, then removed before print/Debug Print runs.
-- `view`: ephemeral presentation state: `previewMode` (`pages` or `cards`), `density` (`auto`, `large`, or `grid`), the active mobile `surface`, the manager query, the detail index/side, and the cardbook dialog confirmations (`saveConfirm`, `loadConfirm`). Pending confirmations reset when a dialog closes, when the save name changes, or when a different book row is chosen.
+- `plan`: the print page plan from `buildPagePlan(strips, page, layout)`, used by the preview grid, the Pages view, `#print-area`, and Debug Print only.
+- `inspectPlan`: the both-sides page plan built from the same strips and page config, used by the gallery and detail view only. It is never assigned to `state.plan`, so inspection cannot change print order, page count, page sides, or duplex mirroring.
+- `strips`: the strip descriptors of the current build, kept so a missing inspection side can be recorded lazily without rebuilding the flow.
+- `printCards`: `Map<strip, {front, back}>` of the print card elements per panel, recorded while building `#print-area` and extended by `recordSide()` when the inspection plan needs a side the print plan skipped. Recorded pages are fitted in a detached pass and removed before print/Debug Print runs.
+- `recorded`: `{signature, side}` cache for that detached pass. The signature covers selected ids, sort, content mode, and page config, and the cache is cleared on every `buildPreview()`.
+- `view`: ephemeral presentation state: `previewMode` (`pages` or `cards`), `density` (`auto`, `large`, or `grid`), `inspectSide` (`front` or `back`, the gallery side toggle), `detailSide` (per open, initialized from `inspectSide`), the active mobile `surface`, the manager query, the detail index/side, and the cardbook dialog confirmations (`saveConfirm`, `loadConfirm`). Pending confirmations reset when a dialog closes, when the save name changes, or when a different book row is chosen.
 - `grid`: the last computed `{cols, rows, pageW, cardW}` preview metrics.
 
 Cardbook dialogs keep their return-focus target outside `state` (`saveReturnFocus`, `loadReturnFocus`) so the detail and manager surfaces can keep their own targets. Loading a book never writes `state.layout`, `state.contentMode`, `state.view.density`, or the page plan directly: it changes only `state.selected`, then calls `updateSelection()` once. The active sort therefore applies to the loaded cards at render, and the front/back print order is rebuilt through the normal `buildPreview()` path. Selecting, sorting, printing, and pagination behave exactly as they do for a hand-picked selection.
+
+Inspection order equals print order. The gallery and detail view dedupe `state.inspectPlan` in plan order, which is the card sequence the print plan packs onto its sheets; duplex mirroring changes only where a back cell sits, never which cards are inspected. The inspection side is ephemeral screen state: `state.view.inspectSide` is owned by the gallery side toggle in the selection tray, `state.view.detailSide` by the open detail view, both reset from `state.layout` when the layout changes and when the preview closes, and neither is written to a cardbook or to the print document.
 
 There is no URL, hash, History API, or session-state integration. The card tools are intentionally simple, local-first interfaces that persist only named books via browser storage. Preview mode, density, filter expansion, manager search, open surfaces, and detail position are reload-scoped.
 

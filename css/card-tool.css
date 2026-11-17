@@ -448,6 +448,18 @@ button {
     display: none
 }
 
+#inspection-side-group {
+    display: none
+}
+
+#inspection-side-group:not([hidden]) {
+    display: inline-flex
+}
+
+#selection-tray .layout-seg {
+    white-space: nowrap
+}
+
 #preview-wrap {
     flex: 1;
     min-height: 0;
@@ -1408,6 +1420,26 @@ dialog::backdrop {
     }
 
     #toggle-browse {
+        display: none
+    }
+}
+
+@media (max-width: 420px) {
+    #selection-tray {
+        gap: .35rem
+    }
+
+    #selection-tray .layout-seg {
+        padding: .34rem .45rem
+    }
+
+    #selection-status {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis
+    }
+
+    #selection-status .selection-label {
         display: none
     }
 }

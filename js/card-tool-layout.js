@@ -1,3 +1,5 @@
+import {buildPagePlan} from "./card-tool-pages.js";
+
 const MM_PER_INCH = 25.4;
 const CSS_PX_PER_INCH = 96;
 
@@ -121,58 +123,23 @@ function emptyGroup (sheetIndex, side) {
 	return {
 		sheetIndex,
 		side,
-		label: side === "both" ? "Fronts and Backs" : side === "back" ? "Backs" : "Fronts",
+		label: side === "back" ? "Backs" : "Fronts",
 		tiles: [],
+		seen: new Set(),
 	};
 }
 
-export function galleryGroups (plan, layout = "fronts") {
-	const entries = Array.isArray(plan) ? plan : [];
-	const groups = [];
-	const bySheet = new Map();
-	const wantedSides = layout === "backs" ? new Set(["back"]) : layout === "both" ? new Set(["front", "back"]) : new Set(["front"]);
-
-	for (const entry of entries) {
-		if (!entry || !wantedSides.has(entry.side)) continue;
-		let group = bySheet.get(entry.sheetIndex);
-		if (!group) {
-			group = emptyGroup(entry.sheetIndex, layout === "both" ? "both" : entry.side);
-			bySheet.set(entry.sheetIndex, group);
-			groups.push(group);
-		}
-		const seen = group.seen ?? (group.seen = new Set());
-		for (const cell of entry.cells ?? []) {
-			if (!cell?.strip || seen.has(cell.strip)) continue;
-			seen.add(cell.strip);
-			const sides = {front: entry.side === "front", back: entry.side === "back"};
-			group.tiles.push({
-				strip: cell.strip,
-				sheetIndex: entry.sheetIndex,
-				side: layout === "backs" ? "back" : "front",
-				sides,
-				panels: Math.max(1, cell.strip.panels?.length ?? 1),
-				paired: layout === "both",
-			});
-		}
-	}
-
-	for (const group of groups) {
-		delete group.seen;
-		if (layout === "both") {
-			for (const tile of group.tiles) tile.sides = {front: true, back: true};
-		}
-	}
-	return groups;
+function sideOfPlanEntry (entry) {
+	return entry?.side === "back" ? "back" : entry?.side === "front" ? "front" : null;
 }
 
-export function detailSequence (plan, layout = "fronts") {
+function dedupeSequence (plan) {
 	const entries = Array.isArray(plan) ? plan : [];
 	const sequence = [];
 	const byStrip = new Map();
-	const wantedSides = layout === "backs" ? new Set(["back"]) : layout === "both" ? new Set(["front", "back"]) : new Set(["front"]);
-
 	for (const entry of entries) {
-		if (!entry || !wantedSides.has(entry.side)) continue;
+		const side = sideOfPlanEntry(entry);
+		if (!side) continue;
 		for (const cell of entry.cells ?? []) {
 			if (!cell?.strip) continue;
 			let item = byStrip.get(cell.strip);
@@ -186,10 +153,141 @@ export function detailSequence (plan, layout = "fronts") {
 				byStrip.set(cell.strip, item);
 				sequence.push(item);
 			}
-			item.sides[entry.side] = true;
+			item.sides[side] = true;
 		}
 	}
 	return sequence;
+}
+
+function mirroredCellIndex (index, columns) {
+	const row = Math.floor(index / columns);
+	const column = index % columns;
+	return row * columns + (columns - 1 - column);
+}
+
+function logicalCells (entry, columns) {
+	const cells = entry?.cells ?? [];
+	if (entry?.side !== "back") return cells;
+	// A back page mirrors its columns, so unmirror the cells to recover the card order
+	// the front page used. Inspection order describes cards, not sheet columns.
+	return cells
+		.map((cell, index) => ({cell, index: mirroredCellIndex(index, columns)}))
+		.sort((left, right) => left.index - right.index)
+		.map(item => item.cell);
+}
+
+/**
+ * Deduped card sequence of a plan, with duplex-mirrored back rows unmirrored through
+ * `page`. Used to prove the inspection sequence and every print layout agree.
+ */
+export function cardSequence (plan, page) {
+	const entries = Array.isArray(plan) ? plan : [];
+	const columns = Math.max(1, Math.floor(Number(page?.columns) || 1));
+	const sequence = [];
+	const byStrip = new Map();
+	for (const entry of entries) {
+		const side = sideOfPlanEntry(entry);
+		if (!side) continue;
+		for (const cell of logicalCells(entry, columns)) {
+			if (!cell?.strip) continue;
+			let item = byStrip.get(cell.strip);
+			if (!item) {
+				item = {
+					strip: cell.strip,
+					sheetIndex: entry.sheetIndex,
+					panels: Math.max(1, cell.strip.panels?.length ?? 1),
+					sides: {front: false, back: false},
+				};
+				byStrip.set(cell.strip, item);
+				sequence.push(item);
+			}
+			item.sides[side] = true;
+		}
+	}
+	return sequence;
+}
+
+/**
+ * Compares the deduped inspection sequence against the card sequence each print layout
+ * packs onto its sheets. Returns `{fronts, backs, both}`; every value must be true so the
+ * gallery and detail view cannot drift away from the page plan.
+ */
+export function printOrderMatchesInspection (strips, page) {
+	const inspection = cardSequence(buildPagePlan(strips, page, "both"), page);
+	const matches = {};
+	for (const layout of ["fronts", "backs", "both"]) {
+		const print = cardSequence(buildPagePlan(strips, page, layout), page);
+		matches[layout] = inspection.length === print.length
+			&& inspection.every((item, index) => item.strip === print[index].strip);
+	}
+	return matches;
+}
+
+/**
+ * Groups one sheet's worth of cards for the requested inspection side. Tile order follows
+ * the plan's front cells, so switching sides never reorders the gallery; only the displayed
+ * card face changes.
+ */
+export function galleryGroups (plan, side = "front") {
+	const entries = Array.isArray(plan) ? plan : [];
+	const wanted = side === "back" ? "back" : "front";
+	const present = new Map();
+	const sidesByStrip = new Map();
+
+	for (const entry of entries) {
+		const entrySide = sideOfPlanEntry(entry);
+		if (!entrySide) continue;
+		if (entrySide === wanted) {
+			let available = present.get(entry.sheetIndex);
+			if (!available) present.set(entry.sheetIndex, available = new Set());
+			for (const cell of entry.cells ?? []) {
+				if (cell?.strip) available.add(cell.strip);
+			}
+		}
+		for (const cell of entry.cells ?? []) {
+			if (!cell?.strip) continue;
+			let sides = sidesByStrip.get(cell.strip);
+			if (!sides) sidesByStrip.set(cell.strip, sides = {front: false, back: false});
+			sides[entrySide] = true;
+		}
+	}
+
+	const hasFrontEntries = entries.some(entry => sideOfPlanEntry(entry) === "front");
+	const orderEntries = hasFrontEntries
+		? entries.filter(entry => sideOfPlanEntry(entry) === "front")
+		: entries.filter(entry => sideOfPlanEntry(entry) === wanted);
+	const groups = [];
+	const bySheet = new Map();
+
+	for (const entry of orderEntries) {
+		const available = present.get(entry.sheetIndex);
+		if (!available) continue;
+		let group = bySheet.get(entry.sheetIndex);
+		for (const cell of entry.cells ?? []) {
+			if (!cell?.strip || !available.has(cell.strip)) continue;
+			if (!group) {
+				group = emptyGroup(entry.sheetIndex, wanted);
+				bySheet.set(entry.sheetIndex, group);
+				groups.push(group);
+			}
+			if (group.seen.has(cell.strip)) continue;
+			group.seen.add(cell.strip);
+			group.tiles.push({
+				strip: cell.strip,
+				sheetIndex: entry.sheetIndex,
+				side: wanted,
+				sides: {...(sidesByStrip.get(cell.strip) ?? {front: false, back: false})},
+				panels: Math.max(1, cell.strip.panels?.length ?? 1),
+			});
+		}
+	}
+
+	for (const group of groups) delete group.seen;
+	return groups;
+}
+
+export function detailSequence (plan) {
+	return dedupeSequence(plan);
 }
 
 export function filterSelection (entities, query, listMeta) {
@@ -215,6 +313,8 @@ globalThis.CardToolLayout = {
 	computePreviewGrid,
 	galleryGroups,
 	detailSequence,
+	cardSequence,
+	printOrderMatchesInspection,
 	filterSelection,
 	selectionMatches,
 };

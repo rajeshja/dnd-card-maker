@@ -8,7 +8,10 @@
 		layout: "fronts",
 		contentMode: "single",
 		plan: [],
+		inspectPlan: [],
+		strips: [],
 		printCards: new Map(),
+		recorded: {signature: "", side: null},
 		galleryScroll: {cards: 0, pages: 0},
 		view: {
 			previewMode: "pages",
@@ -20,6 +23,7 @@
 			loadConfirm: null,
 			detailIndex: null,
 			detailSide: "front",
+			inspectSide: "front",
 		},
 		grid: {cols: 1, rows: 1, pageW: 0, cardW: 0},
 	};
@@ -210,6 +214,30 @@
 		});
 	}
 
+	function updateInspectionSideButtons () {
+		document.querySelectorAll("#inspection-side-group [data-inspect-side]").forEach(button => {
+			button.setAttribute("aria-pressed", String(button.dataset.inspectSide === state.view.inspectSide));
+		});
+	}
+
+	function impliedInspectSide () {
+		return state.layout === "backs" ? "back" : "front";
+	}
+
+	function resetInspectionSide () {
+		state.view.inspectSide = impliedInspectSide();
+		state.view.detailSide = state.view.inspectSide;
+		updateInspectionSideButtons();
+	}
+
+	function setInspectionSide (side) {
+		if (side !== "front" && side !== "back") return;
+		if (side === state.view.inspectSide) return;
+		state.view.inspectSide = side;
+		updateInspectionSideButtons();
+		buildGallery();
+	}
+
 	function buildStrips (selectedItems) {
 		if (state.config.flow) {
 			const flow = globalThis.CardToolFlow;
@@ -341,6 +369,9 @@
 		const strips = buildStrips(selectedItems);
 		const plan = pagePlan.buildPagePlan(strips, state.config.page, state.layout);
 		state.plan = plan;
+		state.inspectPlan = pagePlan.buildPagePlan(strips, state.config.page, "both");
+		state.strips = strips;
+		state.recorded = {signature: planSignature(), side: null};
 		const sheetCount = plan.reduce((count, entry) => Math.max(count, entry.sheetIndex), 0);
 		const grid = $("preview-grid");
 		const gallery = $("cards-gallery");
@@ -398,21 +429,6 @@
 		applyGridMetrics();
 		fitRenderedCards(grid);
 		fitRenderedCards(print);
-		const recordPages = [];
-		// A multi-panel card can place its last panel on the sheet back. Under
-		// Fronts those pages are not printed, but the panel still belongs to the
-		// logical card, so build and fit them for the gallery/detail record only.
-		const needsBackRecords = state.layout === "fronts" && strips.some(strip => (strip.panels?.length ?? 1) > 1);
-		if (needsBackRecords) {
-			for (const entry of pagePlan.buildPagePlan(strips, state.config.page, "backs")) {
-				const page = createPrintPage(entry);
-				page.dataset.recordOnly = "true";
-				print.appendChild(page);
-				recordPages.push(page);
-			}
-			fitRenderedCards(print);
-		}
-		for (const page of recordPages) page.remove();
 		buildGallery();
 		updatePreviewModeVisibility();
 		if (frame) cancelAnimationFrame(frame);
@@ -424,6 +440,60 @@
 
 	function pageGeometry () {
 		return layoutTool.PAGE_GEOMETRY[state.config.page.orientation === "portrait" ? "portrait" : "landscape"];
+	}
+
+	function planSignature () {
+		return JSON.stringify({
+			ids: [...state.selected.keys()].sort(),
+			sort: $("sort").value,
+			contentMode: state.contentMode,
+			page: state.config.page,
+		});
+	}
+
+	function printRendersSide (side) {
+		return state.plan.some(entry => entry?.side === side);
+	}
+
+	function inspectionHasSide (strip, side) {
+		return state.inspectPlan.some(entry => entry?.side === side
+			&& (entry.cells ?? []).some(cell => cell?.strip === strip));
+	}
+
+	// Render one side of the inspection plan without touching the print document: the pages
+	// live in a detached record pass, get fitted, fill `state.printCards`, and are removed.
+	function recordSide (side) {
+		const print = $("print-area");
+		const layout = side === "back" ? "backs" : "fronts";
+		const pages = [];
+		for (const entry of pagePlan.buildPagePlan(state.strips, state.config.page, layout)) {
+			const page = createPrintPage(entry);
+			page.dataset.recordOnly = "true";
+			print.appendChild(page);
+			pages.push(page);
+		}
+		fitRenderedCards(print);
+		for (const page of pages) page.remove();
+	}
+
+	// The inspection plan always holds both sides; the print plan may hold only one. Record
+	// the missing side on first demand and cache it until the next plan build.
+	function ensureInspectionSide (side) {
+		if (!state.inspectPlan.length) return false;
+		if (printRendersSide(side)) return true;
+		const signature = planSignature();
+		if (state.recorded.side === side && state.recorded.signature === signature) return true;
+		state.recorded = {signature, side: null};
+		recordSide(side);
+		state.recorded = {signature, side};
+		return true;
+	}
+
+	function ensureDetailSide (item, side) {
+		ensureInspectionSide(side);
+		// A front view stacks every panel of the logical card, including a continuation panel
+		// that lands on the sheet back, so a multi-panel card also needs the recorded back.
+		if (side === "front" && item.panels > 1) ensureInspectionSide("back");
 	}
 
 	function printCardSize () {
@@ -490,7 +560,7 @@
 	}
 
 	function galleryTotalSheets () {
-		return state.plan.reduce((count, entry) => Math.max(count, entry.sheetIndex), 0);
+		return state.inspectPlan.reduce((count, entry) => Math.max(count, entry.sheetIndex), 0);
 	}
 
 	function buildGallery () {
@@ -500,8 +570,9 @@
 		gallery.style.setProperty("--card-h", `${cards.height}px`);
 		gallery.style.setProperty("--card-aspect", String(cards.width / cards.height));
 		gallery.innerHTML = "";
-		const groups = layoutTool.galleryGroups(state.plan, state.layout);
-		const sequence = layoutTool.detailSequence(state.plan, state.layout);
+		ensureInspectionSide(state.view.inspectSide);
+		const groups = layoutTool.galleryGroups(state.inspectPlan, state.view.inspectSide);
+		const sequence = layoutTool.detailSequence(state.inspectPlan);
 		const positions = new Map(sequence.map((item, index) => [item.strip, index]));
 		const sheetCount = galleryTotalSheets();
 		if (!groups.length) {
@@ -549,7 +620,10 @@
 		const cards = state.view.previewMode === "cards";
 		$("cards-gallery").hidden = !cards;
 		$("pages-canvas").hidden = cards;
+		const sideGroup = $("inspection-side-group");
+		if (sideGroup) sideGroup.hidden = !cards;
 		updatePreviewModeButtons();
+		updateInspectionSideButtons();
 	}
 
 	function setPreviewMode (mode) {
@@ -578,9 +652,13 @@
 		document.body.classList.remove("print-debug");
 		document.body.classList.remove("no-bg-graphics");
 		state.plan = [];
+		state.inspectPlan = [];
+		state.strips = [];
 		state.printCards.clear();
+		state.recorded = {signature: "", side: null};
 		state.layout = "fronts";
 		state.view.detailIndex = null;
+		resetInspectionSide();
 		closeDetail();
 		updateLayoutButtons();
 		updateContentButtons();
@@ -1119,14 +1197,15 @@
 	}
 
 	function detailSequence () {
-		return layoutTool.detailSequence(state.plan, state.layout);
+		return layoutTool.detailSequence(state.inspectPlan);
 	}
 
 	function openDetail (index) {
 		const sequence = detailSequence();
 		if (!sequence[index]) return;
 		state.view.detailIndex = index;
-		state.view.detailSide = state.layout === "backs" ? "back" : "front";
+		// The detail view opens on the side the gallery is showing; flipping stays local.
+		state.view.detailSide = state.view.inspectSide;
 		detailZoom = 1;
 		renderDetail();
 		setSurface("detail");
@@ -1157,14 +1236,27 @@
 			.sort((left, right) => left[0] - right[0]);
 	}
 
+	function canFlipStrip (strip) {
+		const record = state.printCards.get(strip);
+		if (!record) return false;
+		const other = state.view.detailSide === "back" ? "front" : "back";
+		const prepared = Boolean(record[other]?.size);
+		// Availability comes from the prepared cards: the strip must have a rendered side, and
+		// the inspection plan must place it on the other side. The unseen side is recorded on
+		// first flip; the print layout's side flags never decide this.
+		return Boolean(record.front?.size || record.back?.size)
+			&& (prepared || inspectionHasSide(strip, other));
+	}
+
 	function renderDetail () {
 		const sequence = detailSequence();
 		const item = sequence[state.view.detailIndex];
 		if (!item) return;
 		const side = state.view.detailSide;
+		ensureDetailSide(item, side);
 		$("detail-position").textContent = `${state.view.detailIndex + 1} of ${sequence.length}`;
-		const canFlip = Boolean(item.sides.front && item.sides.back);
-		$("detail-flip").hidden = !canFlip || state.layout !== "both";
+		const canFlip = canFlipStrip(item.strip);
+		$("detail-flip").hidden = !canFlip;
 		$("detail-flip").textContent = side === "back" ? "Front" : "Back";
 		$("detail-prev").disabled = state.view.detailIndex <= 0;
 		$("detail-next").disabled = state.view.detailIndex >= sequence.length - 1;
@@ -1395,7 +1487,7 @@
 		$("detail-flip").addEventListener("click", flipDetail);
 		$("card-detail").addEventListener("close", () => {
 			state.view.detailIndex = null;
-			state.view.detailSide = "front";
+			state.view.detailSide = state.view.inspectSide;
 			detailZoom = 1;
 			$("detail-stack").innerHTML = "";
 			$("detail-stack").style.transform = "";
@@ -1453,6 +1545,7 @@
 		state.layout = "fronts";
 		state.view.previewMode = isPhone() ? "cards" : "pages";
 		state.view.density = "auto";
+		resetInspectionSide();
 		document.body.classList.toggle("page-portrait", state.config.page.orientation === "portrait");
 		$("page-title").textContent = config.title;
 		$("query").placeholder = `${config.entityLabel} name...`;
@@ -1465,8 +1558,13 @@
 			const button = event.target.closest("[data-layout]");
 			if (!button) return;
 			state.layout = button.dataset.layout;
+			resetInspectionSide();
 			updateLayoutButtons();
 			if (state.selected.size) buildPreview();
+		});
+		$("inspection-side-group")?.addEventListener("click", event => {
+			const button = event.target.closest("[data-inspect-side]");
+			if (button) setInspectionSide(button.dataset.inspectSide);
 		});
 		$("content-group")?.addEventListener("click", event => {
 			const button = event.target.closest("[data-content]");
