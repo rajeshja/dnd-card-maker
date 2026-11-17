@@ -4,7 +4,7 @@
 
 The repository now includes multiple card pages with different source roots and allowlists:
 
-- `spell-cards.html` loads from `./5etools/data/spells/` and fetches the spell files configured in its `FILES` list.
+- `spell-cards.html` loads from `./5etools/data/spells/` and fetches the spell files configured in its `FILES` list. `prepareSpells()` then fetches `./5etools/data/generated/gendata-spell-source-lookup.json` once to resolve class membership.
 - `item-cards.html` loads from `./5etools/data/` and reads the item payloads configured for that page.
 - `beast-cards.html` loads from `./5etools/data/bestiary/` and reads the beast payloads configured for that page.
 
@@ -16,7 +16,7 @@ Each page fetches its dataset with `Promise.allSettled`; failed files are ignore
 
 The shared formatter and filters assume entity-specific 5etools fields, not a single universal spell schema:
 
-- Spell cards: `name`, `source`, `level`, `school`, `time`, `range`, `components`, `duration`, `entries`, and `classes` metadata.
+- Spell cards: `name`, `source`, `level`, `school`, `time`, `range`, `components`, `duration`, `entries`, plus the derived `_classes` and `_classLabel` fields described under [Spell classes](#spell-classes).
 - Item cards: `name`, `source`, `type`, `rarity`, and `entries`.
 - Beast cards: `name`, `source`, `type`, `size`, `alignment`, `ac`, `hp`, `speed`, `cr`, and `trait`/`action` entries.
 
@@ -29,10 +29,20 @@ The generic filter model is page-specific but consistent:
 - Search is a case-insensitive substring match on `name`.
 - Source and type chips are exact matches.
 - Additional filters such as spell schools, item rarities, and beast creature types vary per page.
+- The spell Class filter matches the resolved `_classes` field, so subclass-only spells are reachable through their owning class; see [Spell classes](#spell-classes).
 - Active chip filters are conjunctive.
 - Sort choices are page-configured and may include name, source, type, and legacy spell-specific ordering.
 
 The list is independent from selection; changing filters does not remove already selected cards.
+
+## Spell classes
+
+The spell page resolves class data from `5etools/data/generated/gendata-spell-source-lookup.json`, keyed by lower-case source file suffix and then lower-case spell name. `prepareSpells()` reads both `class` and `classVariant` for base classes and `subclass` for subclass grants, then attaches two derived fields using `resolveSpellClasses()` and `spellClassLabel()` from `js/card-tool-content.js`:
+
+- `_classes`: the base class names when the spell has any, otherwise the distinct owning classes of its subclass grants. The Class filter chips match this field.
+- `_classLabel`: the display value on the back card — base names, otherwise grouped short subclass names such as `Wizard (Chronurgy, Graviturgy)`, or an em dash when there is neither.
+
+Base classes take precedence and subclass grants fill gaps only. A spell with a base class is never widened by a subclass grant from another class, which matters because the lookup records Magical-Secrets-style access for most spells; only the 15 EGW subclass-only spells (and no base-class spell) gain chip reachability this way. Subclass names use the lookup's short key, are grouped by owning class, and both lists are de-duplicated and sorted alphabetically, so 2014/2024 edition twins and data order do not leak onto the card. If the lookup fetch fails, spells keep no derived fields: the Class chips have no values and the Classes row shows the em dash.
 
 ## Content Mode
 

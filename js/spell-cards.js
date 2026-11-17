@@ -1,15 +1,19 @@
-import {SCHOOLS, escapeText, spellCard, spellFlow, spellOrdinal} from "./card-tool-content.js";
+import {SCHOOLS, escapeText, resolveSpellClasses, spellCard, spellClassLabel, spellFlow, spellOrdinal} from "./card-tool-content.js";
 
 const spellClasses = spell => spell._classes || [];
 const prepareSpells = async spells => {
 	try {
-		const response = await fetch("./5etools/data/spells/sources.json");
+		const response = await fetch("./5etools/data/generated/gendata-spell-source-lookup.json");
 		if (!response.ok) return spells;
-		const sources = await response.json();
+		const lookup = await response.json();
 		return spells.map(spell => {
-			const sourceSpell = sources[spell.source]?.[spell.name];
-			const classes = [...(sourceSpell?.class || []), ...(sourceSpell?.classVariant || [])].map(entry => entry.name).filter(Boolean);
-			return {...spell, _classes: [...new Set(classes)]};
+			const entry = lookup[spell.source?.toLowerCase()]?.[spell.name?.toLowerCase()];
+			const {classes, grants} = resolveSpellClasses(entry);
+			return {
+				...spell,
+				_classes: classes.length ? classes : grants.map(grant => grant.className),
+				_classLabel: spellClassLabel(entry).text,
+			};
 		});
 	} catch (error) {
 		return spells;
@@ -21,7 +25,9 @@ const spellBack = spell => {
 	const slug = school.toLowerCase().replace(/[^a-z0-9]+/g, "-");
 	const asset = name => `card-images/${name}-${slug}.png`;
 	const indicators = [spell.duration?.[0]?.concentration && "◉ concentration", spell.meta?.ritual && "✧ ritual"].filter(Boolean);
-	return `<div class="card-inner back-card-inner school-${escapeText(spell.school || "")}"><article class="back-card"><img class="back-ornament back-ornament-top" src="${asset("top-embellishment")}" alt=""><div class="back-kicker">Spell Card</div><img class="back-ornament back-ornament-underline" src="${asset("spell-card-underline")}" alt=""><div class="back-hero"><h1 class="back-card-title back-spell-name">${escapeText(spell.name)}</h1><img class="back-school-art" src="card-images/${slug}-icon.svg" alt=""></div>${indicators.length ? `<div class="back-indicators">${indicators.map(indicator => `<span class="back-indicator">${indicator}</span>`).join("")}</div>` : ""}<img class="back-ornament back-ornament-divider" src="${asset("section-divider")}" alt=""><div class="back-meta"><div class="back-meta-row"><img class="back-meta-icon" src="${asset("school-icon")}" alt=""><strong class="back-meta-label">School:</strong><span class="back-meta-value">${escapeText(school)}</span></div><div class="back-meta-row"><img class="back-meta-icon" src="${asset("level-icon")}" alt=""><strong class="back-meta-label">Level:</strong><span class="back-meta-value">${escapeText(spellOrdinal(spell.level))}</span></div><div class="back-meta-row"><img class="back-meta-icon" src="${asset("classes-icon")}" alt=""><strong class="back-meta-label">Source:</strong><span class="back-meta-value">${escapeText(spell.source)}</span></div></div><img class="back-ornament back-ornament-bottom" src="${asset("bottom-embellishment")}" alt=""></article></div>`;
+	const classLabel = (spell._classes || []).length === 1 ? "Class:" : "Classes:";
+	const metaRow = (icon, label, value) => `<div class="back-meta-row"><img class="back-meta-icon" src="${asset(icon)}" alt=""><strong class="back-meta-label">${label}</strong><span class="back-meta-value">${value}</span></div>`;
+	return `<div class="card-inner back-card-inner school-${escapeText(spell.school || "")}"><article class="back-card"><img class="back-ornament back-ornament-top" src="${asset("top-embellishment")}" alt=""><div class="back-kicker">Spell Card</div><img class="back-ornament back-ornament-underline" src="${asset("spell-card-underline")}" alt=""><div class="back-hero"><h1 class="back-card-title back-spell-name">${escapeText(spell.name)}</h1><img class="back-school-art" src="card-images/${slug}-icon.svg" alt="">${indicators.length ? `<div class="back-indicators">${indicators.map(indicator => `<span class="back-indicator">${indicator}</span>`).join("")}</div>` : ""}</div><img class="back-ornament back-ornament-divider" src="${asset("section-divider")}" alt=""><div class="back-meta">${metaRow("level-icon", "Level:", escapeText(spellOrdinal(spell.level)))}${metaRow("school-icon", "School:", escapeText(school))}${metaRow("classes-icon", classLabel, escapeText(spell._classLabel || "—"))}</div><img class="back-ornament back-ornament-bottom" src="${asset("bottom-embellishment")}" alt=""><span class="back-source">${escapeText(spell.source)}</span></article></div>`;
 };
 CardTool.start({
 	type: "spell",

@@ -6,7 +6,9 @@ Each card type has a dedicated front-card renderer. Spell and item panels come f
 
 ## Back Cards and Assets
 
-Back cards are card-specific as well. Spell backs render school, level, classes, concentration/ritual indicators, and the spell name. Item and beast backs use a simpler label layout with item or beast metadata. All back-card layouts rely on relative asset paths under the project-local `card-images/` directory, and the repository ships the spell-card art set there. Optional item and beast artwork resolves from the project-local `img/` directory, which is not tracked by the repository. If that directory is removed, renamed, or path casing changes, the back preview and print output will show broken image references.
+Back cards are card-specific as well. A spell back renders the spell name in the hero, the concentration and ritual indicators overlaid on the school art inside that hero, a divider, and a meta block whose rows read level, school, and classes, followed by the bottom ornament. The spell's source code is a separate text stamp pinned to the bottom-right of the card, outside the ornament row, so it stays visible when the bottom ornament is missing, fails to load, or is hidden, and when the meta block overflows.
+
+The classes row prints the class list resolved by `prepareSpells()` and never truncates it: a long list wraps and is allowed to overflow the card rather than being abbreviated, ellipsized, or fitted. The indicators are absolutely positioned inside the hero, so they add no flow height and never move the meta block. Item and beast backs use a simpler label layout with item or beast metadata. All back-card layouts rely on relative asset paths under the project-local `card-images/` directory, and the repository ships the spell-card art set there. Optional item and beast artwork resolves from the project-local `img/` directory, which is not tracked by the repository. If that directory is removed, renamed, or path casing changes, the back preview and print output will show broken image references.
 
 ## Content Flow
 
@@ -91,7 +93,7 @@ The printer must flip the sheet left-to-right for backs to land behind their own
 
 ## Fitting
 
-`fitRenderedCards()` measures screen and print cards after every preview build, reducing titles and body text while preserving readable layout inside each card. Body fitting starts at the card's `data-content-pt` size when the flow adapter set one, so the chosen ladder size is not silently undone. Print fitting temporarily applies `#print-area.fit-measure` when print markup is hidden, and Debug Print refits `#print-area` when it opens. The fitter never grows text above the flow size; the smaller screen preview may shrink a card further when it cannot reproduce the print box at print size.
+`fitRenderedCards()` measures screen and print cards after every preview build, reducing titles and body text while preserving readable layout inside each card. Body fitting starts at the card's `data-content-pt` size when the flow adapter set one, so the chosen ladder size is not silently undone. Back faces have no body fit step: only their titles are fitted, and the back meta block is never measured, compacted, or truncated. Print fitting temporarily applies `#print-area.fit-measure` when print markup is hidden, and Debug Print refits `#print-area` when it opens. The fitter never grows text above the flow size; the smaller screen preview may shrink a card further when it cannot reproduce the print box at print size.
 
 Card typography is viewport-independent. `.screen-page`, `.card`, and the gallery/detail card hosts establish an inline-size container, and the entity title clamp resolves against the card width (`clamp(9pt, 2cqw, 14pt)`) with a `12pt` fallback for browsers without container queries. Because gallery and detail clones keep the print card width before scaling, their computed title size matches print at every viewport.
 
