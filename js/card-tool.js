@@ -5,18 +5,47 @@
 		filtered: [],
 		selected: new Map(),
 		clearedGroups: new Set(),
-		zoom: 1,
 		layout: "fronts",
 		contentMode: "single",
+		plan: [],
+		printCards: new Map(),
+		galleryScroll: {cards: 0, pages: 0},
+		view: {
+			previewMode: "pages",
+			density: "auto",
+			surface: null,
+			manageQuery: "",
+			manageConfirm: false,
+			detailIndex: null,
+			detailSide: "front",
+		},
+		grid: {cols: 1, rows: 1, pageW: 0, cardW: 0},
 	};
 
 	const $ = id => document.getElementById(id);
 	const esc = value => String(value ?? "").replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[char]));
 	const utils = globalThis.CardToolUtils;
 	const pagePlan = globalThis.CardToolPages;
+	const layoutTool = globalThis.CardToolLayout;
+	const phoneQuery = window.matchMedia("(max-width: 599px)");
+	const compactHeightQuery = window.matchMedia("(max-height: 820px)");
+
+	let managerReturnFocus = null;
+	let galleryPress = null;
+	let suppressGalleryClick = false;
+	let detailSwipe = null;
+	let detailPointers = new Map();
+	let detailPinch = null;
+	let detailZoom = 1;
+	let resetPagesZoom = () => {};
+	let frame = 0;
 
 	function idOf (entity) {
 		return `${state.config.type}|${entity.name}|${entity.source}`;
+	}
+
+	function isPhone () {
+		return phoneQuery.matches;
 	}
 
 	async function load () {
@@ -47,9 +76,19 @@
 		for (const group of groups) {
 			const section = document.createElement("section");
 			section.className = "filter-section";
+			section.dataset.filterSection = group.id;
 			const baseAction = group.id === "source" ? `<button class="filter-action" type="button" data-base-sources>5E Base</button>` : "";
-			section.innerHTML = `<div class="filter-title-row"><h2>${esc(group.label)}</h2><span class="filter-actions"><button class="filter-action" type="button" data-all>All</button>${baseAction}<button class="filter-action" type="button" data-clear>Clear</button></span></div><div class="chips" data-chip-host="${esc(group.id)}"></div>`;
+			section.innerHTML = `<div class="filter-title-row"><button class="filter-toggle" type="button" aria-expanded="true"><span class="filter-caret" aria-hidden="true">▾</span><h2>${esc(group.label)}</h2><span class="filter-summary">all</span></button><span class="filter-actions"><button class="filter-action" type="button" data-all>All</button>${baseAction}<button class="filter-action" type="button" data-clear>Clear</button></span></div><div class="chips" data-chip-host="${esc(group.id)}"></div>`;
 			host.appendChild(section);
+			const toggle = section.querySelector(".filter-toggle");
+			if (isPhone()) {
+				section.classList.add("collapsed");
+				toggle.setAttribute("aria-expanded", "false");
+			}
+			toggle.addEventListener("click", () => {
+				const collapsed = section.classList.toggle("collapsed");
+				toggle.setAttribute("aria-expanded", String(!collapsed));
+			});
 			const values = utils.getFilterValues(state.all, group);
 			const chips = section.querySelector(".chips");
 			for (const value of values) {
@@ -79,6 +118,18 @@
 				filter();
 			});
 		}
+		updateFilterSummaries();
+	}
+
+	function updateFilterSummaries () {
+		document.querySelectorAll("[data-filter-section]").forEach(section => {
+			const chips = [...section.querySelectorAll(".chip")];
+			const on = chips.filter(chip => chip.classList.contains("on")).length;
+			const summary = section.querySelector(".filter-summary");
+			if (!summary) return;
+			summary.textContent = on === chips.length ? "all" : on === 0 ? "none" : `${on} of ${chips.length}`;
+			summary.title = summary.textContent;
+		});
 	}
 
 	function filter () {
@@ -95,6 +146,7 @@
 		state.filtered.sort((a, b) => state.config.sort(a, b, sort));
 		const entityLabel = state.config.entityLabel.replace(/s$/i, "").toLowerCase();
 		$("result-count").textContent = `${state.filtered.length} ${entityLabel}${state.filtered.length === 1 ? "" : "s"}`;
+		updateFilterSummaries();
 		renderList();
 	}
 
@@ -121,16 +173,9 @@
 
 	function updateSelection () {
 		$("selection-count").textContent = state.selected.size;
+		$("mobile-selected-count").textContent = state.selected.size;
 		renderList();
-		const tray = $("selection-tray");
-		tray.innerHTML = state.selected.size ? "" : "<span class=\"tray-empty\">No cards selected</span>";
-		for (const [id, entity] of state.selected) {
-			const chip = document.createElement("span");
-			chip.className = "tray-chip";
-			chip.innerHTML = `${esc(entity.name)} <button type="button" aria-label="Remove ${esc(entity.name)}">×</button>`;
-			chip.querySelector("button").addEventListener("click", () => { state.selected.delete(id); updateSelection(); });
-			tray.appendChild(chip);
-		}
+		if (state.view.surface === "selected" && $("selection-manager").open) renderManager();
 		if (state.selected.size) buildPreview();
 		else hidePreview();
 	}
@@ -144,6 +189,18 @@
 	function updateContentButtons () {
 		document.querySelectorAll("#content-group [data-content]").forEach(button => {
 			button.setAttribute("aria-pressed", String(button.dataset.content === state.contentMode));
+		});
+	}
+
+	function updateDensityButtons () {
+		document.querySelectorAll("#density-group [data-density]").forEach(button => {
+			button.setAttribute("aria-pressed", String(button.dataset.density === state.view.density));
+		});
+	}
+
+	function updatePreviewModeButtons () {
+		document.querySelectorAll("#preview-mode-group [data-preview]").forEach(button => {
+			button.setAttribute("aria-pressed", String(button.dataset.preview === state.view.previewMode));
 		});
 	}
 
@@ -224,35 +281,93 @@
 		return label;
 	}
 
+	function applyPageLayout (page) {
+		const isPortrait = state.config.page.orientation === "portrait";
+		page.style.setProperty("--page-columns", state.config.page.columns);
+		page.style.setProperty("--page-rows", state.config.page.rows);
+		page.style.setProperty("--page-width", isPortrait ? "210mm" : "297mm");
+		page.style.setProperty("--page-height", isPortrait ? "297mm" : "210mm");
+		page.style.aspectRatio = isPortrait ? "210 / 297" : "297 / 210";
+	}
+
+	function createPageUnit (entry, sheetCount) {
+		const unit = document.createElement("div");
+		unit.className = "page-unit";
+		unit.dataset.sheet = entry.sheetIndex;
+		unit.dataset.side = entry.side;
+		const label = document.createElement("div");
+		label.className = "page-label";
+		label.textContent = `Sheet ${entry.sheetIndex} of ${sheetCount} - ${entry.side === "back" ? "Backs" : "Fronts"}`;
+		const screenPage = document.createElement("div");
+		screenPage.className = "screen-page";
+		applyPageLayout(screenPage);
+		const printPage = document.createElement("div");
+		printPage.className = "page";
+		applyPageLayout(printPage);
+		unit.append(label, screenPage);
+		return {unit, screenPage, printPage};
+	}
+
+	function recordPrintCard (record, side, cell, element) {
+		if (!cell?.strip) return;
+		const entry = record.get(cell.strip) ?? {front: new Map(), back: new Map()};
+		entry[side].set(cell.panelIndex, element);
+		record.set(cell.strip, entry);
+	}
+
+	function createPrintPage (entry) {
+		const printPage = document.createElement("div");
+		printPage.className = "page";
+		applyPageLayout(printPage);
+		entry.cells.forEach(cell => {
+			const printCard = document.createElement("div");
+			printCard.className = `card${cell ? "" : " empty"}`;
+			applyGuides(printCard, cell);
+			printCard.innerHTML = cellHtml(entry.side, cell);
+			printPage.appendChild(printCard);
+			recordPrintCard(state.printCards, entry.side, cell, printCard);
+		});
+		return printPage;
+	}
+
 	function buildPreview () {
 		const selectedItems = [...state.selected.values()].sort((a, b) => state.config.sort(a, b, $("sort").value));
 		const strips = buildStrips(selectedItems);
 		const plan = pagePlan.buildPagePlan(strips, state.config.page, state.layout);
+		state.plan = plan;
 		const sheetCount = plan.reduce((count, entry) => Math.max(count, entry.sheetIndex), 0);
-		const screen = $("screen-pages");
+		const grid = $("preview-grid");
+		const gallery = $("cards-gallery");
 		const print = $("print-area");
-		screen.innerHTML = "";
+		grid.innerHTML = "";
+		gallery.innerHTML = "";
 		print.innerHTML = "";
+		state.printCards.clear();
 		const buckets = describeBuckets(plan);
 		const showHeadings = state.contentMode === "overflow";
 		const headingSlots = showHeadings ? pagePlan.bucketHeadingSlots(plan) : [];
+		const pairHosts = new Map();
 		plan.forEach((entry, index) => {
 			for (const bucketName of headingSlots[index] ?? []) {
 				const heading = document.createElement("h2");
 				heading.className = "bucket-heading";
 				heading.textContent = bucketHeading(buckets.get(bucketName), bucketName, sheetCount);
-				screen.appendChild(heading);
+				grid.appendChild(heading);
 			}
-			const label = document.createElement("div");
-			label.className = "page-label";
-			label.textContent = `Sheet ${entry.sheetIndex} of ${sheetCount} - ${entry.side === "back" ? "Backs" : "Fronts"}`;
-			screen.appendChild(label);
-			const screenPage = document.createElement("div");
-			screenPage.className = "screen-page";
-			applyPageLayout(screenPage);
-			const printPage = document.createElement("div");
-			printPage.className = "page";
-			applyPageLayout(printPage);
+			const {unit, screenPage, printPage} = createPageUnit(entry, sheetCount);
+			if (state.layout === "both") {
+				let pair = pairHosts.get(entry.sheetIndex);
+				if (!pair) {
+					pair = document.createElement("div");
+					pair.className = "sheet-pair";
+					pair.dataset.sheet = entry.sheetIndex;
+					pairHosts.set(entry.sheetIndex, pair);
+					grid.appendChild(pair);
+				}
+				pair.appendChild(unit);
+			} else {
+				grid.appendChild(unit);
+			}
 			entry.cells.forEach(cell => {
 				const screenCard = document.createElement("div");
 				screenCard.className = `screen-card${cell ? "" : " empty"}`;
@@ -264,39 +379,206 @@
 				applyGuides(printCard, cell);
 				printCard.innerHTML = cellHtml(entry.side, cell);
 				printPage.appendChild(printCard);
+				recordPrintCard(state.printCards, entry.side, cell, printCard);
 			});
-			screen.appendChild(screenPage);
 			print.appendChild(printPage);
 		});
 		updateLayoutButtons();
 		updateContentButtons();
+		updateDensityButtons();
 		$("placeholder").hidden = true;
-		screen.hidden = false;
+		$("screen-pages").hidden = false;
 		$("print-actions").hidden = false;
-		fitRenderedCards(screen);
+		applyGridMetrics();
+		fitRenderedCards(grid);
 		fitRenderedCards(print);
-		screen.querySelectorAll(".screen-page").forEach(page => page.style.transform = `scale(${state.zoom})`);
+		const recordPages = [];
+		// A multi-panel card can place its last panel on the sheet back. Under
+		// Fronts those pages are not printed, but the panel still belongs to the
+		// logical card, so build and fit them for the gallery/detail record only.
+		const needsBackRecords = state.layout === "fronts" && strips.some(strip => (strip.panels?.length ?? 1) > 1);
+		if (needsBackRecords) {
+			for (const entry of pagePlan.buildPagePlan(strips, state.config.page, "backs")) {
+				const page = createPrintPage(entry);
+				page.dataset.recordOnly = "true";
+				print.appendChild(page);
+				recordPages.push(page);
+			}
+			fitRenderedCards(print);
+		}
+		for (const page of recordPages) page.remove();
+		buildGallery();
+		updatePreviewModeVisibility();
+		if (frame) cancelAnimationFrame(frame);
+		frame = requestAnimationFrame(() => {
+			frame = 0;
+			updateGalleryScale();
+		});
 	}
 
-	function applyPageLayout (page) {
-		const isPortrait = state.config.page.orientation === "portrait";
-		page.style.setProperty("--page-columns", state.config.page.columns);
-		page.style.setProperty("--page-rows", state.config.page.rows);
-		page.style.setProperty("--page-width", isPortrait ? "210mm" : "297mm");
-		page.style.setProperty("--page-height", isPortrait ? "297mm" : "210mm");
-		page.style.aspectRatio = isPortrait ? "210 / 297" : "297 / 210";
+	function pageGeometry () {
+		return layoutTool.PAGE_GEOMETRY[state.config.page.orientation === "portrait" ? "portrait" : "landscape"];
+	}
+
+	function printCardSize () {
+		const geometry = pageGeometry();
+		const columns = Math.max(1, state.config.page.columns || geometry.columns);
+		const rows = Math.max(1, state.config.page.rows || geometry.rows);
+		const width = geometry.widthMm * layoutTool.MM_TO_PX / columns;
+		const height = width * (geometry.heightMm / rows) / (geometry.widthMm / columns);
+		return {width, height};
+	}
+
+	function availablePreviewSize () {
+		const wrap = $("preview-wrap");
+		const style = getComputedStyle(wrap);
+		const width = wrap.clientWidth - (parseFloat(style.paddingLeft) || 0) - (parseFloat(style.paddingRight) || 0);
+		const height = wrap.clientHeight - (parseFloat(style.paddingTop) || 0) - (parseFloat(style.paddingBottom) || 0);
+		return {availableWidth: Math.max(0, width), availableHeight: Math.max(0, height)};
+	}
+
+	function applyGridMetrics () {
+		if (!state.plan.length || !state.config) return;
+		const grid = $("preview-grid");
+		const result = layoutTool.computePreviewGrid({
+			...availablePreviewSize(),
+			page: state.config.page,
+			layout: state.layout,
+			density: state.view.density,
+			pageCount: state.plan.length,
+		});
+		state.grid = result;
+		grid.style.setProperty("--grid-cols", String(result.cols));
+		grid.style.setProperty("--page-w", `${result.pageW}px`);
+		grid.style.setProperty("--page-h", `${result.pageH}px`);
+		grid.classList.toggle("paired", Boolean(result.paired));
+		grid.classList.toggle("stacked", Boolean(result.stacked));
+		grid.querySelectorAll(".sheet-pair").forEach(pair => pair.classList.toggle("stacked", Boolean(result.stacked)));
+	}
+
+	function scheduleGridMetrics () {
+		if (frame) cancelAnimationFrame(frame);
+		frame = requestAnimationFrame(() => {
+			frame = 0;
+			applyGridMetrics();
+			updateGalleryScale();
+		});
+	}
+
+	function updateGalleryScale () {
+		const gallery = $("cards-gallery");
+		const sample = gallery.querySelector(".gallery-card");
+		if (!sample) return;
+		const width = sample.getBoundingClientRect().width;
+		const cardW = parseFloat(gallery.style.getPropertyValue("--card-w")) || printCardSize().width;
+		if (!width || !cardW) return;
+		gallery.style.setProperty("--gallery-scale", String(width / cardW));
+	}
+
+	function galleryCardFor (tile) {
+		const record = state.printCards.get(tile.strip);
+		const sideMap = tile.side === "back" ? record?.back : record?.front;
+		if (!sideMap?.size) return null;
+		if (sideMap.has(0)) return sideMap.get(0);
+		return [...sideMap.entries()].sort((left, right) => left[0] - right[0])[0][1];
+	}
+
+	function galleryTotalSheets () {
+		return state.plan.reduce((count, entry) => Math.max(count, entry.sheetIndex), 0);
+	}
+
+	function buildGallery () {
+		const gallery = $("cards-gallery");
+		const cards = printCardSize();
+		gallery.style.setProperty("--card-w", `${cards.width}px`);
+		gallery.style.setProperty("--card-h", `${cards.height}px`);
+		gallery.style.setProperty("--card-aspect", String(cards.width / cards.height));
+		gallery.innerHTML = "";
+		const groups = layoutTool.galleryGroups(state.plan, state.layout);
+		const sequence = layoutTool.detailSequence(state.plan, state.layout);
+		const positions = new Map(sequence.map((item, index) => [item.strip, index]));
+		const sheetCount = galleryTotalSheets();
+		if (!groups.length) {
+			const empty = document.createElement("p");
+			empty.className = "gallery-empty";
+			empty.textContent = "No cards to preview.";
+			gallery.appendChild(empty);
+			return;
+		}
+		for (const group of groups) {
+			const section = document.createElement("section");
+			section.className = "gallery-group";
+			const heading = document.createElement("h3");
+			heading.className = "gallery-heading";
+			heading.textContent = `Sheet ${group.sheetIndex} of ${sheetCount} - ${group.label}`;
+			const grid = document.createElement("div");
+			grid.className = "gallery-grid";
+			for (const tile of group.tiles) {
+				const source = galleryCardFor(tile);
+				const button = document.createElement("button");
+				button.type = "button";
+				button.className = "gallery-card";
+				button.dataset.detailIndex = String(positions.get(tile.strip) ?? 0);
+				button.setAttribute("aria-label", `${tile.strip.entity.name}, ${tile.panels} panel${tile.panels === 1 ? "" : "s"}, sheet ${group.sheetIndex} ${group.label}. Open card.`);
+				const scale = document.createElement("span");
+				scale.className = "gallery-scale";
+				if (source) scale.appendChild(source.cloneNode(true));
+				const badge = document.createElement("span");
+				badge.className = "gallery-badge";
+				badge.textContent = `${tile.panels} panel${tile.panels === 1 ? "" : "s"}`;
+				badge.hidden = tile.panels <= 1;
+				const expand = document.createElement("span");
+				expand.className = "gallery-expand";
+				expand.setAttribute("aria-hidden", "true");
+				expand.textContent = "⤢";
+				button.append(scale, badge, expand);
+				grid.appendChild(button);
+			}
+			section.append(heading, grid);
+			gallery.appendChild(section);
+		}
+	}
+
+	function updatePreviewModeVisibility () {
+		const cards = state.view.previewMode === "cards";
+		$("cards-gallery").hidden = !cards;
+		$("pages-canvas").hidden = cards;
+		updatePreviewModeButtons();
+	}
+
+	function setPreviewMode (mode) {
+		if (mode !== "cards" && mode !== "pages") return;
+		if (mode === state.view.previewMode) return;
+		if (state.view.previewMode === "pages") resetPagesZoom();
+		const wrap = $("preview-wrap");
+		if (state.view.previewMode === "cards") state.galleryScroll.cards = wrap.scrollTop;
+		else state.galleryScroll.pages = wrap.scrollTop;
+		state.view.previewMode = mode;
+		updatePreviewModeVisibility();
+		requestAnimationFrame(() => {
+			wrap.scrollTop = mode === "cards" ? state.galleryScroll.cards : state.galleryScroll.pages;
+			updateGalleryScale();
+		});
 	}
 
 	function hidePreview () {
+		resetPagesZoom();
 		$("placeholder").hidden = false;
 		$("screen-pages").hidden = true;
 		$("print-actions").hidden = true;
 		$("print-area").innerHTML = "";
+		$("preview-grid").innerHTML = "";
+		$("cards-gallery").innerHTML = "";
 		document.body.classList.remove("print-debug");
 		document.body.classList.remove("no-bg-graphics");
+		state.plan = [];
+		state.printCards.clear();
 		state.layout = "fronts";
+		state.view.detailIndex = null;
+		closeDetail();
 		updateLayoutButtons();
 		updateContentButtons();
+		updateDensityButtons();
 	}
 
 	function updateDebugButtons () {
@@ -427,18 +709,421 @@
 		alert(`Saved "${name.trim()}".`);
 	}
 
-	function setZoom (delta) {
-		state.zoom = Math.min(2, Math.max(0.5, state.zoom + delta));
-		$("zoom-label").textContent = `${Math.round(state.zoom * 100)}%`;
-		$("screen-pages").querySelectorAll(".screen-page").forEach(page => page.style.transform = `scale(${state.zoom})`);
+	function setDensity (density) {
+		if (!["auto", "large", "grid"].includes(density)) return;
+		state.view.density = density;
+		updateDensityButtons();
+		applyGridMetrics();
+	}
+
+	function selectedEntities () {
+		return [...state.selected.values()].sort((a, b) => state.config.sort(a, b, $("sort").value));
+	}
+
+	function renderManager () {
+		const all = selectedEntities();
+		const matches = layoutTool.filterSelection(all, state.view.manageQuery, state.config.listMeta);
+		$("manager-title").textContent = `Manage selection (${all.length})`;
+		$("manager-count").textContent = `${matches.length} of ${all.length} shown`;
+		const list = $("manager-list");
+		list.innerHTML = "";
+		if (!matches.length) {
+			const empty = document.createElement("p");
+			empty.className = "manager-empty";
+			empty.textContent = all.length ? "No selected cards match this search." : "No cards selected.";
+			list.appendChild(empty);
+			return;
+		}
+		for (const entity of matches) {
+			const id = idOf(entity);
+			const row = document.createElement("div");
+			row.className = "manager-row";
+			row.innerHTML = `<span class="entity-dot" style="background:${esc(state.config.color(entity))}"></span><span class="entity-copy"><strong>${esc(entity.name)}</strong><small>${esc(state.config.listMeta(entity))}</small></span>`;
+			const remove = document.createElement("button");
+			remove.type = "button";
+			remove.setAttribute("aria-label", `Remove ${entity.name}`);
+			remove.textContent = "×";
+			remove.addEventListener("click", () => {
+				state.selected.delete(id);
+				updateSelection();
+			});
+			row.appendChild(remove);
+			list.appendChild(row);
+		}
+	}
+
+	function resetClearConfirm () {
+		state.view.manageConfirm = false;
+		const button = $("manager-clear");
+		button.textContent = "Clear all";
+		button.classList.remove("confirming");
+	}
+
+	function openManager () {
+		managerReturnFocus = document.activeElement;
+		state.view.manageQuery = "";
+		$("manager-search").value = "";
+		resetClearConfirm();
+		renderManager();
+		setSurface("selected");
+		const dialog = $("selection-manager");
+		if (!dialog.open) dialog.showModal();
+		$("manager-search").focus();
+	}
+
+	function closeManager () {
+		const dialog = $("selection-manager");
+		if (dialog.open) dialog.close();
+	}
+
+	function openPrintSheet () {
+		if (!isPhone()) return;
+		syncTopbarActions();
+		setSurface("print");
+		const dialog = $("print-sheet");
+		if (!dialog.open) dialog.showModal();
+	}
+
+	function closePrintSheet () {
+		const dialog = $("print-sheet");
+		if (dialog.open) dialog.close();
+	}
+
+	function openBrowse () {
+		setSurface("browse");
+		$("query").focus();
+	}
+
+	function closeBrowse () {
+		if (state.view.surface === "browse") setSurface(null);
+	}
+
+	function setSurface (surface) {
+		state.view.surface = surface;
+		if (surface) document.body.dataset.surface = surface;
+		else delete document.body.dataset.surface;
+	}
+
+	function syncTopbarActions () {
+		const actions = document.querySelector(".topbar-actions");
+		if (!actions) return;
+		const host = isPhone() ? $("print-sheet-slot") : $("topbar");
+		if (actions.parentElement !== host) host.appendChild(actions);
+	}
+
+	function detailSequence () {
+		return layoutTool.detailSequence(state.plan, state.layout);
+	}
+
+	function openDetail (index) {
+		const sequence = detailSequence();
+		if (!sequence[index]) return;
+		state.view.detailIndex = index;
+		state.view.detailSide = state.layout === "backs" ? "back" : "front";
+		detailZoom = 1;
+		renderDetail();
+		setSurface("detail");
+		const dialog = $("card-detail");
+		if (!dialog.open) dialog.showModal();
+	}
+
+	function closeDetail () {
+		const dialog = $("card-detail");
+		if (dialog.open) dialog.close();
+	}
+
+	function detailCardFor (item, side) {
+		const record = state.printCards.get(item.strip);
+		const sideMap = side === "back" ? record?.back : record?.front;
+		if (!sideMap?.size) return [];
+		const entries = new Map(sideMap);
+		if (side !== "back" && record?.back) {
+			for (const [panelIndex, element] of record.back) {
+				if (entries.has(panelIndex)) continue;
+				if (element.classList.contains("empty")) continue;
+				if (element.querySelector(".back-card") || !element.querySelector(".entity-card")) continue;
+				entries.set(panelIndex, element);
+			}
+		}
+		return [...entries.entries()]
+			.filter(([, element]) => !element.classList.contains("empty"))
+			.sort((left, right) => left[0] - right[0]);
+	}
+
+	function renderDetail () {
+		const sequence = detailSequence();
+		const item = sequence[state.view.detailIndex];
+		if (!item) return;
+		const side = state.view.detailSide;
+		$("detail-position").textContent = `${state.view.detailIndex + 1} of ${sequence.length}`;
+		const canFlip = Boolean(item.sides.front && item.sides.back);
+		$("detail-flip").hidden = !canFlip || state.layout !== "both";
+		$("detail-flip").textContent = side === "back" ? "Front" : "Back";
+		$("detail-prev").disabled = state.view.detailIndex <= 0;
+		$("detail-next").disabled = state.view.detailIndex >= sequence.length - 1;
+		const stack = $("detail-stack");
+		stack.innerHTML = "";
+		stack.style.transform = "";
+		const cards = detailCardFor(item, side);
+		const size = printCardSize();
+		const available = Math.max(120, window.innerWidth - 32);
+		const scale = Math.min(1, available / size.width);
+		stack.style.setProperty("--detail-card-w", `${size.width}px`);
+		stack.style.setProperty("--detail-card-h", `${size.height}px`);
+		stack.style.setProperty("--detail-scale", String(scale));
+		if (!cards.length) {
+			const empty = document.createElement("p");
+			empty.className = "manager-empty";
+			empty.textContent = "This card has no preview for the active side.";
+			stack.appendChild(empty);
+			return;
+		}
+		for (const [panelIndex, source] of cards) {
+			const panel = document.createElement("div");
+			panel.className = "detail-panel";
+			if (cards.length > 1 || item.panels > 1) {
+				const label = document.createElement("span");
+				label.className = "detail-panel-label";
+				label.textContent = `Panel ${panelIndex + 1} of ${item.panels}`;
+				panel.appendChild(label);
+			}
+			const scaleHost = document.createElement("div");
+			scaleHost.className = "detail-scale";
+			scaleHost.appendChild(source.cloneNode(true));
+			panel.appendChild(scaleHost);
+			stack.appendChild(panel);
+		}
+	}
+
+	function stepDetail (delta) {
+		const sequence = detailSequence();
+		const next = state.view.detailIndex + delta;
+		if (next < 0 || next >= sequence.length) return;
+		state.view.detailIndex = next;
+		detailZoom = 1;
+		renderDetail();
+		$("detail-scroll").scrollTop = 0;
+	}
+
+	function flipDetail () {
+		state.view.detailSide = state.view.detailSide === "back" ? "front" : "back";
+		renderDetail();
+	}
+
+	function bindGallery () {
+		const gallery = $("cards-gallery");
+		gallery.addEventListener("pointerdown", event => {
+			const tile = event.target.closest(".gallery-card");
+			if (!tile) return;
+			galleryPress = {x: event.clientX, y: event.clientY, tile};
+		});
+		gallery.addEventListener("pointerup", event => {
+			if (!galleryPress) return;
+			const dx = event.clientX - galleryPress.x;
+			const dy = event.clientY - galleryPress.y;
+			if (Math.hypot(dx, dy) > 10) suppressGalleryClick = true;
+			galleryPress = null;
+		});
+		gallery.addEventListener("pointercancel", () => {
+			galleryPress = null;
+		});
+		gallery.addEventListener("click", event => {
+			const tile = event.target.closest(".gallery-card");
+			if (!tile) return;
+			if (suppressGalleryClick) {
+				suppressGalleryClick = false;
+				return;
+			}
+			const index = Number(tile.dataset.detailIndex);
+			if (Number.isFinite(index)) openDetail(index);
+		});
+	}
+
+	function bindPagesZoom () {
+		const canvas = $("pages-canvas");
+		const grid = $("preview-grid");
+		const pointers = new Map();
+		let pinch = null;
+		let zoom = 1;
+		const distance = () => {
+			const [first, second] = [...pointers.values()];
+			return Math.hypot(first.x - second.x, first.y - second.y);
+		};
+		resetPagesZoom = () => {
+			pointers.clear();
+			pinch = null;
+			zoom = 1;
+			grid.style.transform = "";
+			grid.style.transformOrigin = "";
+		};
+		canvas.addEventListener("pointerdown", event => {
+			pointers.set(event.pointerId, {x: event.clientX, y: event.clientY});
+			if (pointers.size === 2) pinch = {distance: distance(), zoom};
+		});
+		canvas.addEventListener("pointermove", event => {
+			if (!pointers.has(event.pointerId)) return;
+			pointers.set(event.pointerId, {x: event.clientX, y: event.clientY});
+			if (pointers.size !== 2 || !pinch || !pinch.distance) return;
+			const [first, second] = [...pointers.values()];
+			const rect = grid.getBoundingClientRect();
+			grid.style.transformOrigin = `${(first.x + second.x) / 2 - rect.left}px ${(first.y + second.y) / 2 - rect.top}px`;
+			zoom = Math.min(4, Math.max(1, pinch.zoom * distance() / pinch.distance));
+			grid.style.transform = `scale(${zoom})`;
+			event.preventDefault();
+		});
+		const release = event => {
+			pointers.delete(event.pointerId);
+			if (pointers.size < 2) pinch = null;
+			if (!pointers.size && zoom < 1.05) {
+				zoom = 1;
+				grid.style.transform = "";
+			}
+		};
+		canvas.addEventListener("pointerup", release);
+		canvas.addEventListener("pointercancel", release);
+	}
+
+	function bindDetailGestures () {		const scroll = $("detail-scroll");
+		scroll.addEventListener("pointerdown", event => {
+			detailPointers.set(event.pointerId, {x: event.clientX, y: event.clientY});
+			if (detailPointers.size === 1) {
+				detailSwipe = {x: event.clientX, y: event.clientY, id: event.pointerId};
+			}
+			if (detailPointers.size === 2) {
+				const [first, second] = [...detailPointers.values()];
+				detailPinch = {distance: Math.hypot(first.x - second.x, first.y - second.y), zoom: detailZoom};
+			}
+		});
+		scroll.addEventListener("pointermove", event => {
+			if (!detailPointers.has(event.pointerId)) return;
+			detailPointers.set(event.pointerId, {x: event.clientX, y: event.clientY});
+			if (detailPointers.size === 2 && detailPinch && detailPinch.distance > 0) {
+				const [first, second] = [...detailPointers.values()];
+				const distance = Math.hypot(first.x - second.x, first.y - second.y);
+				detailZoom = Math.min(4, Math.max(1, detailPinch.zoom * distance / detailPinch.distance));
+				$("detail-stack").style.transform = `scale(${detailZoom})`;
+				event.preventDefault();
+			}
+		});
+		const release = event => {
+			if (detailSwipe && event.pointerId === detailSwipe.id) {
+				const dx = event.clientX - detailSwipe.x;
+				const dy = event.clientY - detailSwipe.y;
+				if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy) * 1.4 && detailPointers.size < 2) stepDetail(dx < 0 ? 1 : -1);
+				detailSwipe = null;
+			}
+			detailPointers.delete(event.pointerId);
+			if (detailPointers.size < 2) detailPinch = null;
+		};
+		scroll.addEventListener("pointerup", release);
+		scroll.addEventListener("pointercancel", release);
+	}
+
+	function bindDialogs () {
+		$("manage-selection").addEventListener("click", openManager);
+		document.querySelectorAll("[data-close-manager]").forEach(button => button.addEventListener("click", closeManager));
+		$("manager-search").addEventListener("input", event => {
+			state.view.manageQuery = event.target.value;
+			renderManager();
+		});
+		$("manager-remove-shown").addEventListener("click", () => {
+			const all = selectedEntities();
+			const matches = layoutTool.filterSelection(all, state.view.manageQuery, state.config.listMeta);
+			matches.forEach(entity => state.selected.delete(idOf(entity)));
+			updateSelection();
+		});
+		$("manager-clear").addEventListener("click", () => {
+			if (!state.view.manageConfirm) {
+				state.view.manageConfirm = true;
+				const button = $("manager-clear");
+				button.textContent = "Confirm clear";
+				button.classList.add("confirming");
+				return;
+			}
+			resetClearConfirm();
+			state.selected.clear();
+			updateSelection();
+		});
+		$("selection-manager").addEventListener("close", () => {
+			state.view.manageQuery = "";
+			$("manager-search").value = "";
+			resetClearConfirm();
+			if (state.view.surface === "selected") setSurface(null);
+			if (managerReturnFocus?.isConnected) managerReturnFocus.focus();
+			managerReturnFocus = null;
+		});
+		document.querySelectorAll("[data-close-print]").forEach(button => button.addEventListener("click", closePrintSheet));
+		$("print-sheet").addEventListener("close", () => {
+			if (state.view.surface === "print") setSurface(null);
+		});
+		document.querySelectorAll("[data-close-browse]").forEach(button => button.addEventListener("click", closeBrowse));
+		$("close-browse").addEventListener("click", closeBrowse);
+		$("toggle-browse").addEventListener("click", openBrowse);
+		$("detail-close").addEventListener("click", closeDetail);
+		$("detail-prev").addEventListener("click", () => stepDetail(-1));
+		$("detail-next").addEventListener("click", () => stepDetail(1));
+		$("detail-flip").addEventListener("click", flipDetail);
+		$("card-detail").addEventListener("close", () => {
+			state.view.detailIndex = null;
+			state.view.detailSide = "front";
+			detailZoom = 1;
+			$("detail-stack").innerHTML = "";
+			$("detail-stack").style.transform = "";
+			detailPointers.clear();
+			detailPinch = null;
+			detailSwipe = null;
+			if (state.view.surface === "detail") setSurface(null);
+		});
+		document.addEventListener("keydown", event => {
+			if (state.view.surface === "browse" && event.key === "Escape") {
+				closeBrowse();
+				return;
+			}
+			const detail = $("card-detail");
+			if (detail.open) {
+				if (event.key === "ArrowRight") {
+					event.preventDefault();
+					stepDetail(1);
+				} else if (event.key === "ArrowLeft") {
+					event.preventDefault();
+					stepDetail(-1);
+				}
+			}
+		});
+	}
+
+	function bindMobile () {
+		$("mobile-bar").addEventListener("click", event => {
+			const button = event.target.closest("[data-surface]");
+			if (!button) return;
+			const surface = button.dataset.surface;
+			if (surface === "browse") openBrowse();
+			else if (surface === "selected") openManager();
+			else if (surface === "print") openPrintSheet();
+		});
+		syncTopbarActions();
+		if (typeof phoneQuery.addEventListener === "function") {
+			phoneQuery.addEventListener("change", () => {
+				syncTopbarActions();
+				if (isPhone()) setPreviewMode("cards");
+			});
+		}
+	}
+
+	function bindResize () {
+		if (typeof ResizeObserver !== "function") return;
+		const observer = new ResizeObserver(() => scheduleGridMetrics());
+		observer.observe($("preview-wrap"));
+		observer.observe($("cards-gallery"));
 	}
 
 	function start (config) {
 		state.config = { ...config, page: { rows: 2, columns: 4, orientation: "landscape", ...config.page } };
 		state.contentMode = state.config.defaultContentMode || "single";
 		state.layout = "fronts";
+		state.view.previewMode = isPhone() ? "cards" : "pages";
+		state.view.density = "auto";
 		document.body.classList.toggle("page-portrait", state.config.page.orientation === "portrait");
-		$("entity-label").textContent = config.entityLabel;
 		$("page-title").textContent = config.title;
 		$("query").placeholder = `${config.entityLabel} name...`;
 		$("sort").innerHTML = config.sortOptions.map(option => `<option value="${esc(option.value)}">${esc(option.label)}</option>`).join("");
@@ -446,14 +1131,12 @@
 		$("sort").addEventListener("change", filter);
 		$("select-visible").addEventListener("click", () => { state.filtered.forEach(entity => state.selected.set(idOf(entity), entity)); updateSelection(); });
 		$("clear-selection").addEventListener("click", clearSelection);
-		$("zoom-out").addEventListener("click", () => setZoom(-0.1));
-		$("zoom-in").addEventListener("click", () => setZoom(0.1));
 		$("layout-group").addEventListener("click", event => {
 			const button = event.target.closest("[data-layout]");
 			if (!button) return;
 			state.layout = button.dataset.layout;
 			updateLayoutButtons();
-			buildPreview();
+			if (state.selected.size) buildPreview();
 		});
 		$("content-group")?.addEventListener("click", event => {
 			const button = event.target.closest("[data-content]");
@@ -462,13 +1145,29 @@
 			updateContentButtons();
 			if (state.selected.size) buildPreview();
 		});
+		$("density-group").addEventListener("click", event => {
+			const button = event.target.closest("[data-density]");
+			if (button) setDensity(button.dataset.density);
+		});
+		$("preview-mode-group").addEventListener("click", event => {
+			const button = event.target.closest("[data-preview]");
+			if (button) setPreviewMode(button.dataset.preview);
+		});
 		$("debug-print").addEventListener("click", togglePrintDebug);
 		$("btn-exit-debug").addEventListener("click", togglePrintDebug);
 		$("btn-toggle-bg").addEventListener("click", toggleBgGraphics);
 		$("print-cards").addEventListener("click", () => window.print());
 		$("save-book").addEventListener("click", saveBook);
+		bindGallery();
+		bindPagesZoom();
+		bindDetailGestures();
+		bindDialogs();
+		bindMobile();
+		bindResize();
 		updateLayoutButtons();
 		updateContentButtons();
+		updateDensityButtons();
+		updatePreviewModeVisibility();
 		$("overlay-text").textContent = `Loading ${config.entityLabel.toLowerCase()}...`;
 		load().then(() => { buildFilters(); filter(); $("overlay").hidden = true; }).catch(error => { $("overlay-text").textContent = `Unable to load ${config.entityLabel.toLowerCase()}: ${error.message}`; });
 	}

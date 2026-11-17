@@ -48,3 +48,11 @@ Each page configuration sets `defaultContentMode`: spells and items use `single`
 Use a stable entity identifier throughout selection, de-duplication, rendering, and persistence. The shared engine uses `${type}|${name}|${source}` and should preserve this even when the page is spell-only or loaded from legacy saved data.
 
 Generated list rows should still escape name, source labels, and generated attributes before injecting HTML. Prefer DOM APIs for user-provided values where possible.
+
+### Selection bar and manager
+
+The selection bar is status only: it renders `state.selected.size` and a Manage action, and it never renders one element per selected card. Adding or removing a card updates the same fixed-height line, so a 1-card and a 200-card selection consume identical preview space. The topbar does not show a second count.
+
+The manager reads the selected map in the active sort order and filters it with `filterSelection(entities, query, listMeta)` from `js/card-tool-layout.js`. Search is a case-insensitive substring match over `entity.name`, `entity.source`, and `config.listMeta(entity)`; it changes only which rows the manager shows. It does not mutate selection, reorder the selected map, or change the print plan. Per-card removal and Remove shown delete from `state.selected` and then call `updateSelection()` once, so the bar, browse checkmarks, preview, and print document all rebuild in the existing order. Clear all requires a second activation while the manager is open. The manager query and confirmation are ephemeral and reset when the dialog closes.
+
+Remaining cards always keep the active sort order and therefore the same print order; removing a card never promotes or reorders the rest.

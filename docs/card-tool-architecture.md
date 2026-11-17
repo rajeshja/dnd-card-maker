@@ -6,7 +6,28 @@ The shared engine in `js/card-tool.js` powers the standalone card pages used thr
 
 The 5etools source is a git submodule at `5etools/`, pinned to `d2a2616867` (`v2.25.4`). The card tool reads its data from `5etools/data/`; all card-tool code, styles, tests, and back-card assets live in this repository. Do not modify the submodule.
 
-The shell is a fixed layout with a top bar, filter sidebar, selected-item tray, and preview area. The hidden `#print-area` contains print-ready pages; `#screen-pages` contains the screen preview. The DOM-free `js/card-tool-pages.js` module owns strip bucketing, sheet packing, final-sheet padding, per-row back mirroring, per-panel back roles, cut/fold guide roles, and front/back pair ordering. The loading overlay remains visible until the page-specific setup completes.
+The shell is a responsive workspace with a top bar, filter sidebar, a fixed one-line selection bar, and a preview area. The hidden `#print-area` contains print-ready pages; `#screen-pages` contains the screen preview, which can present either the page grid (`#preview-grid`) or the card gallery (`#cards-gallery`). The DOM-free `js/card-tool-pages.js` module owns strip bucketing, sheet packing, final-sheet padding, per-row back mirroring, per-panel back roles, cut/fold guide roles, and front/back pair ordering. The DOM-free `js/card-tool-layout.js` module owns preview page sizing, gallery and detail derivation, and selection search. The loading overlay remains visible until the page-specific setup completes.
+
+### Responsive workspace modes
+
+Width modes are CSS-driven and JS reads the same `matchMedia` breakpoints only to decide which surface to bind:
+
+| Mode | Width | Sidebar | Preview |
+|---|---|---|---|
+| Desktop | `>= 1200px` | `clamp(300px, 22vw, 380px)` | remaining width |
+| Compact desktop | `900-1199px` | `260px` | remaining width |
+| Tablet | `600-899px` | overlay Browse surface | full width |
+| Phone | `< 600px` | full-screen Browse surface | full width |
+
+`#app` uses `100dvh` with a `100vh` fallback. `@media (max-height: 820px)` compacts the topbar to 48px and the selection bar to 40px. The sidebar never grows past 380px; on tablet and phone it leaves the normal flow and slides over the preview, and below 900px a topbar Browse button (tablet) or the bottom bar (phone) opens it.
+
+The sidebar is a three-part column: a search/sort header, a bounded `#filter-groups` region capped at 45% of the sidebar, and `#entity-list`, which keeps a `240px` minimum height and receives all space released by collapsed filters. The list uses a zero flex basis so its very large row count cannot shrink the filter region to a sliver; expanded filters stay scrollable inside their cap. Every filter group is an accordion built from a header button plus the existing `.chips` panel. The header summarizes active state (`all`, `3 of 8`, `none`) while collapsed; chips keep their `data-filter-group`, `data-value`, and `on` semantics, so filtering stays conjunctive and defaults to all values.
+
+The selection area is a 44px bar (40px when vertically compact) showing only the selected count and a Manage action. It never renders per-card chips and never wraps. The topbar no longer repeats the count. Manage opens one `<dialog>` selection manager, styled as a right-side drawer on desktop and a full-height sheet on phone, with search, `N of M shown`, per-card removal, Remove shown, and a two-step Clear all.
+
+On phone a fixed bottom action bar exposes Browse, Selected, and Print. Browse uses the sidebar as a full-screen sheet; Selected reuses the selection manager; Print opens a sheet that owns the moved `.topbar-actions` node (content mode, layout, density, Print, Debug Print, Save, Clear). Controls are moved, never cloned, so listeners and `aria-pressed` state stay single-instance. Below 900px the preview can switch between Cards and Pages; phone starts in Cards.
+
+The detail view is a full-screen `<dialog>` fed by the same print-card clones as the gallery. It is presentation-only: opening, flipping, zooming, or navigating never writes `#print-area`, selection, layout, content mode, density, or sort order, and its state (`detailIndex`, `detailSide`, pinch zoom) is discarded when it closes.
 
 `js/card-tool-flow.js` is the shared content-flow module: it owns the offscreen page probe, the shrink ladder, panel filling, the ellipsis filler, and the beast section segmenter. `js/card-tool-content.js` holds the spell and item content units, panel templates, and flow adapters. Page scripts keep only data loading, filters, sort rules, back-card art, and page configuration. The flow module also publishes its helpers on `globalThis.CardToolFlow` for `buildPreview()` and `beast-cards.js`, so each page loads it before the page script.
 
@@ -18,8 +39,10 @@ The shell is a fixed layout with a top bar, filter sidebar, selected-item tray, 
 4. `filter()` applies search, chips, and sort order.
 5. `renderList()` creates selectable rows from `filtered`.
 6. `toggle()`, `selectVisible()`, and `clearSelection()` mutate the `selected` map.
-7. `buildPreview()` converts each selected entity into a strip descriptor, builds one page plan from those strips, and creates matching screen/print markup for the active layout.
-8. `Print` calls `window.print()` for the active Fronts, Backs, or Both layout; `Debug Print` renders the same `#print-area` pages.
+7. `updateSelection()` updates the count, browse checkmarks, the optional manager list, and rebuilds or hides the preview.
+8. `buildPreview()` converts each selected entity into a strip descriptor, builds one page plan from those strips, and creates matching screen/print markup for the active layout. Screen markup is grouped into `.page-unit` cells inside `#preview-grid`, with `.sheet-pair` wrappers under Both, and the same pass records each strip's print card elements for the gallery and detail view.
+9. The card gallery and detail view are derived from those print-card clones after fitting, so they never re-render or re-fit card text.
+10. `Print` calls `window.print()` for the active Fronts, Backs, or Both layout; `Debug Print` renders the same `#print-area` pages.
 
 A page can supply a `flow(entity, context)` adapter. When it does, `buildPreview()` creates one measurement probe for the build, passes `mode`, `page`, `maxPanels`, and `measure` in the context, and uses each returned strip directly. It disposes the probe after all strips are built. Without a `flow` hook, `buildPreview()` falls back to one single-panel strip per entity, expanding with `config.expand` first when that legacy hook exists. Panel HTML comes from the strip, back art comes from `render("back", strip.entity)`, and `page` back cells reuse the strip panel named by `panelIndex`. This keeps front and back markup, guides, and bucket headings derived from one plan.
 
@@ -33,10 +56,23 @@ The list is filtered independently from selection, so changing filters does not 
 - `config`: page-specific metadata such as title, files, filters, sort rules, and page geometry.
 - `layout`: active preview and print layout, `fronts`, `backs`, or `both`; resets to `fronts` when the preview closes.
 - `contentMode`: active content mode, `single` or `overflow`; starts from the page type's default and survives a selection clear.
-- `zoom`: screen-only zoom, clamped to 50%-200%.
+- `plan`: the current page plan from `buildPagePlan()`, used by the preview grid, gallery, and detail view.
+- `printCards`: `Map<strip, {front, back}>` of the print card elements per panel, recorded while building `#print-area`. Under Fronts, a multi-panel card's sheet-back continuation pages are fitted in a record-only pass so the detail view can stack every panel, then removed before print/Debug Print runs.
+- `view`: ephemeral presentation state: `previewMode` (`pages` or `cards`), `density` (`auto`, `large`, or `grid`), the active mobile `surface`, the manager query, and the detail index/side.
+- `grid`: the last computed `{cols, rows, pageW, cardW}` preview metrics.
 - `currentBookName`: current saved/imported cardbook label when applicable.
 
-There is no URL, hash, History API, or session-state integration. The card tools are intentionally simple, local-first interfaces that persist only named books via browser storage.
+There is no URL, hash, History API, or session-state integration. The card tools are intentionally simple, local-first interfaces that persist only named books via browser storage. Preview mode, density, filter expansion, manager search, open surfaces, and detail position are reload-scoped.
+
+### Manual mobile checks
+
+The responsive surfaces are not covered by the unit suite. After a layout change, verify in a browser at 390x844 and 360x800:
+
+- the bottom bar opens one surface at a time and safe-area padding keeps it tappable;
+- Browse retains filters, selection, and scroll position across open/close;
+- the gallery shows one tile per logical card and taps open detail without breaking scroll;
+- detail swipes, arrows, flip, and close behave as specified;
+- Print from the gallery or detail still produces only card pages.
 
 ## Main Extension Boundary
 

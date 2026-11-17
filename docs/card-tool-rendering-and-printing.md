@@ -53,11 +53,39 @@ Three layouts are available from the toolbar:
 
 Back pages reverse cell order within each row of the paired front page. With a 4x2 landscape grid, front row `A B C D` becomes back row `D C B A`; the same rule applies to a 2x2 portrait beast page. Padded positions stay empty on both sides. Preview page labels read `Sheet N of M - Fronts` or `Sheet N of M - Backs`, and paired pages in Both share the same sheet number.
 
+## Preview Page Grid and Density
+
+`js/card-tool-layout.js` sizes the on-screen page grid from the measured `#preview-wrap` content box. It uses A4 geometry: landscape `297 x 210 mm` with a `4 x 2` card grid, portrait `210 x 297 mm` with a `2 x 2` grid, and `96 / 25.4` CSS pixels per millimetre. Page width is capped at the physical print width (`~1122px` landscape, `~794px` portrait), so preview cards reach print size at large viewports and never exceed it.
+
+For each candidate `(cols, rows)` whose `cols * rows` pages fit the plan, the algorithm takes the smallest of the horizontal budget per page, the vertical budget converted through the page aspect ratio, and the print cap. A candidate is accepted only when its card width stays at or above the `200px` legibility floor. The accepted candidate with the most visible pages wins; ties prefer the larger page. When no candidate qualifies, the preview falls back to the largest single page, which may be below the floor on very small screens. `--grid-cols` and `--page-w` are applied to `#preview-grid`, and `.screen-page` no longer has a fixed `min(860px, 100%)` width.
+
+Density replaces the old transform zoom and never changes print:
+
+- **Auto** follows the responsive page-count algorithm above.
+- **Large** forces a single page at the largest size that fits, capped at print size.
+- **Grid** maximizes visible pages while still respecting the floor.
+
+`#screen-pages` is a visibility wrapper. `#preview-grid` holds `.page-unit` cells, each containing a page label and a `.screen-page`; bucket headings span the full grid width. A `ResizeObserver` on `#preview-wrap` recomputes the grid once per animation frame.
+
+Under Both, consecutive front/back plan entries are wrapped in one `.sheet-pair` grid item and `--grid-cols` counts pairs rather than pages, so a front page always stays adjacent to its own back page. If no paired candidate can meet the floor, the pair is stacked at the largest single page size. Page labels, sheet numbers, and plan order are unchanged; only the wrapper differs. `#print-area` receives no page units, headings, pair wrappers, or workspace chrome.
+
+## Cards View, Gallery, and Detail
+
+Below 900px the preview can switch between Pages and Cards; phone starts in Cards. Pages is the WYSIWYG print view: it keeps labels, bucket headings, guides, the active side, print page order, and local pinch zoom, which is discarded when the view closes. It is the surface to use when checking print order, page sides, or duplex pairing.
+
+The Cards view is an additional reading presentation derived from the same plan, not a second print preview. `galleryGroups(plan, layout)` walks the plan in order and groups tiles by sheet: front entries for Fronts, back entries for Backs, and each sheet's front tiles for Both with both sides marked available. Empty padding is omitted, and each strip appears once, so a three-panel card is one tile with a `3 panels` badge. `detailSequence(plan, layout)` flattens the same order and deduplicates strips; detail navigation uses that sequence and stops at the first and last card instead of wrapping.
+
+Gallery tiles clone the fitted print `.card` nodes. The clone is laid out at print dimensions (`~281 x 397px` landscape, `~397 x 561px` portrait) and scaled uniformly by `transform: scale(k)`, so 5mm padding, borders, body text, and fitted title sizes stay exactly as printed. Tiles are native buttons with accessible names, a visible expand affordance, and a movement threshold so a scroll drag does not open detail. The gallery never substitutes for the Pages view when verifying print output.
+
+The detail `<dialog>` shows one logical card at a time from the same print clones. Multi-panel cards stack panels vertically at print geometry with `Panel n of m` labels; horizontal swipe, previous/next, and arrow keys navigate cards; vertical scrolling stays inside the detail region. When the active front only prints the leading panels, any continuation panel assigned to the sheet back is still included in the stack, because it belongs to the same logical card; those back pages are fitted in a record-only pass and removed from `#print-area` before the print document is exposed. Under Fronts the flip is hidden, under Backs detail opens on the back, and under Both the flip swaps sides without changing card position. Pinch zoom is local to the open detail view. Closing via the control, Escape, or dialog cancel leaves selection, layout, content mode, sort, gallery scroll, and `#print-area` untouched.
+
 The printer must flip the sheet left-to-right for backs to land behind their own fronts. In print-dialog terms this is normally short-edge duplex for A4 landscape and long-edge duplex for A4 portrait. The Backs and Both previews render that mirrored page directly, so back cell placement is checked in the plan tests and the preview rather than on paper.
 
 ## Fitting
 
 `fitRenderedCards()` measures screen and print cards after every preview build, reducing titles and body text while preserving readable layout inside each card. Body fitting starts at the card's `data-content-pt` size when the flow adapter set one, so the chosen ladder size is not silently undone. Print fitting temporarily applies `#print-area.fit-measure` when print markup is hidden, and Debug Print refits `#print-area` when it opens. The fitter never grows text above the flow size; the smaller screen preview may shrink a card further when it cannot reproduce the print box at print size.
+
+Card typography is viewport-independent. `.screen-page`, `.card`, and the gallery/detail card hosts establish an inline-size container, and the entity title clamp resolves against the card width (`clamp(9pt, 2cqw, 14pt)`) with a `12pt` fallback for browsers without container queries. Because gallery and detail clones keep the print card width before scaling, their computed title size matches print at every viewport.
 
 These values are layout policy, not data; adjust only with preview and print checks.
 
