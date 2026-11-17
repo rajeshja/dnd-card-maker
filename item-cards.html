@@ -20,7 +20,7 @@
     <div id="app">
         <header id="topbar">
             <h1 id="page-title"></h1>
-            <div class="topbar-actions"><button id="toggle-browse" class="btn" type="button">Browse</button><button id="save-book" class="btn" type="button">Save</button><button
+            <div class="topbar-actions"><button id="toggle-browse" class="btn" type="button">Browse</button><button id="save-book" class="btn book-action" type="button" aria-label="Save cardbook"><svg class="btn-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M2.5 2.5h8.2l2.8 2.8v8.2h-11z"/><path d="M5 2.5v4h6v-4M5 13.5v-4h6v4"/></svg><span class="btn-label">Save</span></button><button id="load-book" class="btn book-action" type="button" aria-label="Load cardbook"><svg class="btn-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M1.8 4h4.1l1.5 1.6h6.8v7.2H1.8z"/><path d="M1.8 6.7h12.4"/></svg><span class="btn-label">Load</span></button><button
                     id="clear-selection" class="btn" type="button">Clear</button><span id="print-actions" hidden><span
                         id="content-group" class="layout-group content-group" role="group"
                         aria-label="Content mode"><button class="layout-seg" type="button" data-content="single"
@@ -88,6 +88,28 @@
         <div class="dialog-actions"><button id="manager-remove-shown" class="btn" type="button">Remove shown</button><button
                 id="manager-clear" class="btn" type="button">Clear all</button></div>
     </dialog>
+    <dialog id="save-book-dialog" class="manager" aria-labelledby="save-book-title">
+        <div class="dialog-head">
+            <h2 id="save-book-title">Save cardbook</h2><button class="dialog-close" type="button" data-close-save
+                aria-label="Close save cardbook">×</button>
+        </div>
+        <label class="dialog-field" for="save-book-name">Name</label>
+        <input id="save-book-name" class="search" type="text" autocomplete="off" spellcheck="false"
+            placeholder="Cardbook name">
+        <p id="save-book-status" class="dialog-status" role="status" aria-live="polite"></p>
+        <div class="dialog-actions"><button id="save-book-confirm" class="btn primary" type="button">Save</button><button
+                class="btn" type="button" data-close-save>Cancel</button></div>
+    </dialog>
+    <dialog id="load-book-dialog" class="manager" aria-labelledby="load-book-title">
+        <div class="dialog-head">
+            <h2 id="load-book-title">Load cardbook</h2><button class="dialog-close" type="button" data-close-load
+                aria-label="Close load cardbook">×</button>
+        </div>
+        <p id="load-book-summary" class="dialog-status"></p>
+        <div id="load-book-list" class="manager-list"></div>
+        <p id="load-book-status" class="dialog-status" role="status" aria-live="polite"></p>
+        <div class="dialog-actions"><button class="btn" type="button" data-close-load>Close</button></div>
+    </dialog>
     <dialog id="print-sheet" class="sheet" aria-labelledby="print-sheet-title">
         <div class="dialog-head">
             <h2 id="print-sheet-title">Print</h2><button class="dialog-close" type="button" data-close-print
@@ -114,6 +136,7 @@
     <script src="js/card-tool-flow.js" type="module"></script>
     <script src="js/card-tool-pages.js" type="module"></script>
     <script src="js/card-tool-layout.js" type="module"></script>
+    <script src="js/card-tool-cardbooks.js" type="module"></script>
     <script src="js/card-tool.js" type="module"></script>
     <script src="js/item-cards.js" type="module"></script>
 </body>

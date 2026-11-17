@@ -6,7 +6,7 @@ The shared engine in `js/card-tool.js` powers the standalone card pages used thr
 
 The 5etools source is a git submodule at `5etools/`, pinned to `d2a2616867` (`v2.25.4`). The card tool reads its data from `5etools/data/`; all card-tool code, styles, tests, and back-card assets live in this repository. Do not modify the submodule.
 
-The shell is a responsive workspace with a top bar, filter sidebar, a fixed one-line selection bar, and a preview area. The hidden `#print-area` contains print-ready pages; `#screen-pages` contains the screen preview, which can present either the page grid (`#preview-grid`) or the card gallery (`#cards-gallery`). The DOM-free `js/card-tool-pages.js` module owns strip bucketing, sheet packing, final-sheet padding, per-row back mirroring, per-panel back roles, cut/fold guide roles, and front/back pair ordering. The DOM-free `js/card-tool-layout.js` module owns preview page sizing, gallery and detail derivation, and selection search. The loading overlay remains visible until the page-specific setup completes.
+The shell is a responsive workspace with a top bar, filter sidebar, a fixed one-line selection bar, and a preview area. The hidden `#print-area` contains print-ready pages; `#screen-pages` contains the screen preview, which can present either the page grid (`#preview-grid`) or the card gallery (`#cards-gallery`). The DOM-free `js/card-tool-pages.js` module owns strip bucketing, sheet packing, final-sheet padding, per-row back mirroring, per-panel back roles, cut/fold guide roles, and front/back pair ordering. The DOM-free `js/card-tool-layout.js` module owns preview page sizing, gallery and detail derivation, and selection search. The DOM-free `js/card-tool-cardbooks.js` module owns the stored cardbook format, legacy normalisation, reference identity, dedupe, and unmatched resolution. The loading overlay remains visible until the page-specific setup completes.
 
 ### Responsive workspace modes
 
@@ -25,9 +25,20 @@ The sidebar is a three-part column: a search/sort header, a bounded `#filter-gro
 
 The selection area is a 44px bar (40px when vertically compact) showing only the selected count and a Manage action. It never renders per-card chips and never wraps. The topbar no longer repeats the count. Manage opens one `<dialog>` selection manager, styled as a right-side drawer on desktop and a full-height sheet on phone, with search, `N of M shown`, per-card removal, Remove shown, and a two-step Clear all.
 
-On phone a fixed bottom action bar exposes Browse, Selected, and Print. Browse uses the sidebar as a full-screen sheet; Selected reuses the selection manager; Print opens a sheet that owns the moved `.topbar-actions` node (content mode, layout, density, Print, Debug Print, Save, Clear). Controls are moved, never cloned, so listeners and `aria-pressed` state stay single-instance. Below 900px the preview can switch between Cards and Pages; phone starts in Cards.
+Save and Load open cardbook dialogs from the topbar's book controls. Until `redesign-workspace-bar` lands they sit side by side in the legacy action cluster, which already overflows below roughly 1350px of CSS width; adding the second control keeps that pre-existing topbar overflow as a recorded intermediate state rather than a new layout rule. Above 1200px both controls show an icon plus label; below that the labels are withdrawn and only the icons remain, so the pair does not clip at tablet widths. Both dialogs follow the manager pattern: the opener is recorded as the return target, `showModal()` traps focus, Escape closes, and focus returns to the opening control on close.
+
+On phone a fixed bottom action bar exposes Browse, Selected, and Print. Browse uses the sidebar as a full-screen sheet; Selected reuses the selection manager; Print opens a sheet that owns the moved `.topbar-actions` node (content mode, layout, density, Print, Debug Print, Save, Load, Clear). Controls are moved, never cloned, so listeners and `aria-pressed` state stay single-instance. Below 900px the preview can switch between Cards and Pages; phone starts in Cards.
 
 The detail view is a full-screen `<dialog>` fed by the same print-card clones as the gallery. It is presentation-only: opening, flipping, zooming, or navigating never writes `#print-area`, selection, layout, content mode, density, or sort order, and its state (`detailIndex`, `detailSide`, pinch zoom) is discarded when it closes.
+
+## Cardbook Dialogs
+
+Save and Load are modal `<dialog>` elements beside the workspace actions. Both follow the selection manager pattern: capture the control that opened the dialog, call `showModal()`, move focus inside, close on Escape through the platform `cancel`, and return focus to the opener on `close`. Shared dialog state lives in `state.view`:
+
+- `saveConfirm`: the book name waiting for a second activation before an overwrite.
+- `loadConfirm`: the book name whose Replace is waiting for confirmation.
+
+The Save dialog owns the name field and all inline status, replacing the old `prompt()` and `alert()`. The Load dialog lists the current type's stored books, marks legacy spellbooks, reports unreadable entries, and resolves references against `state.all` through `js/card-tool-cardbooks.js`. Add and Replace mutate `state.selected` and then call `updateSelection()` once, so the bar, browse list, preview, and print document rebuild from the same page plan. Loading never changes layout, content mode, density, sort, or print order, and it never rewrites storage. A clean load closes the dialog; a load with unmatched references keeps it open for the report. See [card-tool-cardbooks.md](card-tool-cardbooks.md) for the storage contract.
 
 `js/card-tool-flow.js` is the shared content-flow module: it owns the offscreen page probe, the shrink ladder, panel filling, the ellipsis filler, and the beast section segmenter. `js/card-tool-content.js` holds the spell and item content units, panel templates, and flow adapters. Page scripts keep only data loading, filters, sort rules, back-card art, and page configuration. The flow module also publishes its helpers on `globalThis.CardToolFlow` for `buildPreview()` and `beast-cards.js`, so each page loads it before the page script.
 
@@ -42,7 +53,8 @@ The detail view is a full-screen `<dialog>` fed by the same print-card clones as
 7. `updateSelection()` updates the count, browse checkmarks, the optional manager list, and rebuilds or hides the preview.
 8. `buildPreview()` converts each selected entity into a strip descriptor, builds one page plan from those strips, and creates matching screen/print markup for the active layout. Screen markup is grouped into `.page-unit` cells inside `#preview-grid`, with `.sheet-pair` wrappers under Both, and the same pass records each strip's print card elements for the gallery and detail view.
 9. The card gallery and detail view are derived from those print-card clones after fitting, so they never re-render or re-fit card text.
-10. `Print` calls `window.print()` for the active Fronts, Backs, or Both layout; `Debug Print` renders the same `#print-area` pages.
+10. `Save` opens the Save dialog and writes a typed `5etools-cardbook-v1` envelope under the per-type storage key. `Load` lists the stored books for the current entity type and applies Add or Replace through `updateSelection()`.
+11. `Print` calls `window.print()` for the active Fronts, Backs, or Both layout; `Debug Print` renders the same `#print-area` pages.
 
 A page can supply a `flow(entity, context)` adapter. When it does, `buildPreview()` creates one measurement probe for the build, passes `mode`, `page`, `maxPanels`, and `measure` in the context, and uses each returned strip directly. It disposes the probe after all strips are built. Without a `flow` hook, `buildPreview()` falls back to one single-panel strip per entity, expanding with `config.expand` first when that legacy hook exists. Panel HTML comes from the strip, back art comes from `render("back", strip.entity)`, and `page` back cells reuse the strip panel named by `panelIndex`. This keeps front and back markup, guides, and bucket headings derived from one plan.
 
@@ -58,9 +70,10 @@ The list is filtered independently from selection, so changing filters does not 
 - `contentMode`: active content mode, `single` or `overflow`; starts from the page type's default and survives a selection clear.
 - `plan`: the current page plan from `buildPagePlan()`, used by the preview grid, gallery, and detail view.
 - `printCards`: `Map<strip, {front, back}>` of the print card elements per panel, recorded while building `#print-area`. Under Fronts, a multi-panel card's sheet-back continuation pages are fitted in a record-only pass so the detail view can stack every panel, then removed before print/Debug Print runs.
-- `view`: ephemeral presentation state: `previewMode` (`pages` or `cards`), `density` (`auto`, `large`, or `grid`), the active mobile `surface`, the manager query, and the detail index/side.
+- `view`: ephemeral presentation state: `previewMode` (`pages` or `cards`), `density` (`auto`, `large`, or `grid`), the active mobile `surface`, the manager query, the detail index/side, and the cardbook dialog confirmations (`saveConfirm`, `loadConfirm`). Pending confirmations reset when a dialog closes, when the save name changes, or when a different book row is chosen.
 - `grid`: the last computed `{cols, rows, pageW, cardW}` preview metrics.
-- `currentBookName`: current saved/imported cardbook label when applicable.
+
+Cardbook dialogs keep their return-focus target outside `state` (`saveReturnFocus`, `loadReturnFocus`) so the detail and manager surfaces can keep their own targets. Loading a book never writes `state.layout`, `state.contentMode`, `state.view.density`, or the page plan directly: it changes only `state.selected`, then calls `updateSelection()` once. The active sort therefore applies to the loaded cards at render, and the front/back print order is rebuilt through the normal `buildPreview()` path. Selecting, sorting, printing, and pagination behave exactly as they do for a hand-picked selection.
 
 There is no URL, hash, History API, or session-state integration. The card tools are intentionally simple, local-first interfaces that persist only named books via browser storage. Preview mode, density, filter expansion, manager search, open surfaces, and detail position are reload-scoped.
 

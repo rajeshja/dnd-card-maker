@@ -11,7 +11,7 @@ The repository now includes spell, item, and beast card printers, all built arou
 - front and back card renderers;- a `flow(entity, context)` adapter that returns a strip, using the shared ladder with the type's default body size and shrink floor;
 - entity-specific fitting rules, including the page cap (5 on a 4x2 page, 3 on a 2x2 page) and truncation behavior;
 - asset manifest and fallback behavior;
-- versioned export/import references.
+- versioned cardbook persistence with typed references.
 
 Keep the engine entity-neutral. A mixed selection should use a common card interface while allowing entity-specific metadata and templates. Do not assume every card has spell fields such as `school`, `duration`, or `components`. A new card type without a flow adapter still renders one panel per entity, but it cannot shrink, bucket by span, or truncate, so add the adapter before shipping the type.
 
@@ -55,7 +55,7 @@ For changes, manually verify:
 - long titles, long descriptions, tables, missing optional fields, and page-specific edge cases;
 - both content modes: defaults per type, mode switch rebuilding the selection, truncation ellipses, and no headings in Single card mode;
 - overflow bucket headings, bucket order, same-width buckets sharing a sheet, fresh sheets on a width change, and the `truncated` bucket last;
-- saved books, Add/Replace, malformed JSON, unmatched sources, and export/import round trips;
+- saved books, Add/Replace, malformed JSON, unmatched sources, and reload persistence (cardbooks are local-only; there is no file import or export);
 - Fronts, Backs, and Both previews, including paired sheet labels, cut/fold guides, blank interior accordion backs, page-3 and page-5 continuation backs, final-sheet padding, reset-to-Fronts on clear, preview density, and console cleanliness;
 - Debug Print under each layout matches the preview page sequence and sides, plus A4 Print Preview;
 - the browser's background-graphics-off behavior in Print Preview;
