@@ -16,6 +16,8 @@
 			surface: null,
 			manageQuery: "",
 			manageConfirm: false,
+			saveConfirm: null,
+			loadConfirm: null,
 			detailIndex: null,
 			detailSide: "front",
 		},
@@ -27,10 +29,14 @@
 	const utils = globalThis.CardToolUtils;
 	const pagePlan = globalThis.CardToolPages;
 	const layoutTool = globalThis.CardToolLayout;
+	const cardbooks = globalThis.CardToolCardbooks;
 	const phoneQuery = window.matchMedia("(max-width: 599px)");
 	const compactHeightQuery = window.matchMedia("(max-height: 820px)");
 
 	let managerReturnFocus = null;
+	let saveReturnFocus = null;
+	let loadReturnFocus = null;
+	let loadConfirm = null;
 	let galleryPress = null;
 	let suppressGalleryClick = false;
 	let detailSwipe = null;
@@ -698,15 +704,316 @@
 		updateSelection();
 	}
 
+	function entityNoun () {
+		return state.config.entityLabel.replace(/s$/i, "").toLowerCase();
+	}
+
+	function readBookStore (key) {
+		try {
+			const raw = localStorage.getItem(key);
+			if (!raw) return {ok: true, value: {}};
+			const value = JSON.parse(raw);
+			if (!value || typeof value !== "object" || Array.isArray(value)) return {ok: false, value: {}, reason: "Saved cardbooks in this browser cannot be read."};
+			return {ok: true, value};
+		} catch (error) {
+			return {ok: false, value: {}, reason: "Saved cardbooks in this browser cannot be read."};
+		}
+	}
+
+	function readBookEntry (raw, name) {
+		const options = {pageType: state.config.type, name};
+		return typeof raw === "string" ? cardbooks.parseBook(raw, options) : cardbooks.readBook(raw, options);
+	}
+
+	function listBooks () {
+		const keys = [{key: cardbooks.bookKey(state.config.type), legacy: false}];
+		if (state.config.type === "spell") keys.push({key: cardbooks.LEGACY_SPELL_KEY, legacy: true});
+		const seen = new Set();
+		const books = [];
+		const unreadable = [];
+		let storeError = "";
+		for (const {key, legacy} of keys) {
+			const store = readBookStore(key);
+			if (!store.ok) {
+				storeError = store.reason;
+				continue;
+			}
+			for (const [name, raw] of Object.entries(store.value)) {
+				// The modern key wins when the same name exists in both keys.
+				if (seen.has(name)) continue;
+				seen.add(name);
+				const result = readBookEntry(raw, name);
+				if (result.ok) books.push({name, book: result.book, legacy: Boolean(result.legacy) || Boolean(legacy)});
+				else unreadable.push({name, reason: result.reason});
+			}
+		}
+		books.sort((left, right) => left.name.localeCompare(right.name));
+		unreadable.sort((left, right) => left.name.localeCompare(right.name));
+		return {books, unreadable, storeError};
+	}
+
+	function setSaveStatus (message, tone = "") {
+		const status = $("save-book-status");
+		status.textContent = message;
+		if (tone) status.dataset.tone = tone;
+		else delete status.dataset.tone;
+	}
+
+	function resetSaveConfirm () {
+		const button = $("save-book-confirm");
+		button.textContent = "Save";
+		button.classList.remove("confirming");
+		state.view.saveConfirm = null;
+	}
+
+	function setLoadStatus (message, tone = "") {
+		const status = $("load-book-status");
+		status.textContent = message;
+		if (tone) status.dataset.tone = tone;
+		else delete status.dataset.tone;
+	}
+
+	function resetLoadConfirm () {
+		if (loadConfirm?.button?.isConnected) {
+			loadConfirm.button.textContent = "Replace";
+			loadConfirm.button.classList.remove("confirming");
+			loadConfirm.button.closest(".book-row")?.classList.remove("confirming");
+		}
+		loadConfirm = null;
+		state.view.loadConfirm = null;
+	}
+
+	function updateSaveState () {
+		const button = $("save-book-confirm");
+		const name = $("save-book-name").value.trim();
+		resetSaveConfirm();
+		if (!state.selected.size) {
+			button.disabled = true;
+			setSaveStatus(`Select at least one ${entityNoun()} before saving.`, "error");
+			return;
+		}
+		button.disabled = !name;
+		if (!name) {
+			setSaveStatus("Enter a name for this cardbook.", "error");
+			return;
+		}
+		const store = readBookStore(cardbooks.bookKey(state.config.type));
+		if (!store.ok) {
+			setSaveStatus(`${store.reason} This cardbook cannot be saved until storage is readable.`, "error");
+			return;
+		}
+		if (Object.prototype.hasOwnProperty.call(store.value, name)) {
+			setSaveStatus(`A cardbook named "${name}" already exists. Activate Save again to replace it.`, "warn");
+			return;
+		}
+		setSaveStatus("");
+	}
+
+	function openSave (trigger) {
+		saveReturnFocus = trigger ?? document.activeElement;
+		$("save-book-name").value = `${state.config.entityLabel} Collection`;
+		const dialog = $("save-book-dialog");
+		if (!dialog.open) dialog.showModal();
+		updateSaveState();
+		const input = $("save-book-name");
+		input.focus();
+		input.select();
+	}
+
+	function closeSave () {
+		const dialog = $("save-book-dialog");
+		if (dialog.open) dialog.close();
+	}
+
+	function deferFocus (element) {
+		if (!element?.isConnected) return;
+		// The platform restores focus to the pre-modal element after the close event; defer so
+		// the recorded opener wins even when the dialog was opened programmatically.
+		setTimeout(() => {
+			if (element.isConnected) element.focus();
+		}, 0);
+	}
+
 	function saveBook () {
-		if (!state.selected.size) return alert(`Select at least one ${state.config.entityLabel.toLowerCase()} first.`);
-		const name = prompt("Spellbook name:", `${state.config.entityLabel} Collection`);
-		if (!name?.trim()) return;
-		const key = `card-tool-${state.config.type}-books`;
-		const books = JSON.parse(localStorage.getItem(key) || "{}");
-		books[name.trim()] = [...state.selected.values()].map(entity => ({ name: entity.name, source: entity.source }));
-		localStorage.setItem(key, JSON.stringify(books));
-		alert(`Saved "${name.trim()}".`);
+		const button = $("save-book-confirm");
+		const name = $("save-book-name").value.trim();
+		if (!state.selected.size) {
+			button.disabled = true;
+			setSaveStatus(`Select at least one ${entityNoun()} before saving.`, "error");
+			return;
+		}
+		if (!name) {
+			button.disabled = true;
+			setSaveStatus("Enter a name for this cardbook.", "error");
+			return;
+		}
+		const store = readBookStore(cardbooks.bookKey(state.config.type));
+		if (!store.ok) {
+			setSaveStatus(`${store.reason} This cardbook was not saved.`, "error");
+			return;
+		}
+		if (Object.prototype.hasOwnProperty.call(store.value, name) && state.view.saveConfirm !== name) {
+			state.view.saveConfirm = name;
+			button.textContent = "Confirm replace";
+			button.classList.add("confirming");
+			setSaveStatus(`A cardbook named "${name}" already exists. Activate Save again to replace it.`, "warn");
+			return;
+		}
+		const cards = selectedEntities().map(entity => ({type: state.config.type, name: entity.name, source: entity.source}));
+		const next = {...store.value, [name]: {format: cardbooks.CARD_BOOK_FORMAT, name, cards}};
+		try {
+			localStorage.setItem(cardbooks.bookKey(state.config.type), JSON.stringify(next));
+		} catch (error) {
+			setSaveStatus(`Could not save "${name}": ${error?.message || "browser storage rejected the write"}.`, "error");
+			return;
+		}
+		resetSaveConfirm();
+		button.disabled = false;
+		setSaveStatus(`Saved "${name}" with ${cards.length} card${cards.length === 1 ? "" : "s"}.`, "ok");
+	}
+
+	function renderLoad () {
+		const {books, unreadable, storeError} = listBooks();
+		const summary = $("load-book-summary");
+		const list = $("load-book-list");
+		list.innerHTML = "";
+		resetLoadConfirm();
+		if (storeError) {
+			summary.textContent = storeError;
+			summary.dataset.tone = "error";
+		} else if (unreadable.length) {
+			summary.textContent = `${unreadable.length} saved cardbook${unreadable.length === 1 ? " has" : "s have"} unreadable data and cannot be loaded.`;
+			summary.dataset.tone = "warn";
+		} else if (books.length) {
+			summary.textContent = `${books.length} saved cardbook${books.length === 1 ? "" : "s"} for ${state.config.entityLabel.toLowerCase()}.`;
+			delete summary.dataset.tone;
+		} else {
+			summary.textContent = "";
+			delete summary.dataset.tone;
+		}
+		if (!books.length && !unreadable.length && !storeError) {
+			const empty = document.createElement("p");
+			empty.className = "manager-empty";
+			empty.textContent = `No saved ${entityNoun()} cardbooks yet. Use Save to store a selection.`;
+			list.appendChild(empty);
+			return;
+		}
+		for (const entry of books) {
+			const row = document.createElement("div");
+			row.className = "book-row";
+			const copy = document.createElement("div");
+			copy.className = "book-copy";
+			const title = document.createElement("strong");
+			title.textContent = entry.name;
+			const meta = document.createElement("small");
+			const count = entry.book.cards.length;
+			meta.textContent = `${count} card${count === 1 ? "" : "s"}${entry.legacy ? " · legacy spellbook" : ""}`;
+			copy.append(title, meta);
+			const actions = document.createElement("div");
+			actions.className = "book-actions";
+			const add = document.createElement("button");
+			add.type = "button";
+			add.className = "btn";
+			add.textContent = "Add";
+			add.setAttribute("aria-label", `Add ${entry.name}`);
+			add.addEventListener("click", () => {
+				resetLoadConfirm();
+				applyBook(entry, "add");
+			});
+			const replace = document.createElement("button");
+			replace.type = "button";
+			replace.className = "btn";
+			replace.textContent = "Replace";
+			replace.setAttribute("aria-label", `Replace the selection with ${entry.name}`);
+			replace.addEventListener("click", () => requestReplace(entry, replace));
+			actions.append(add, replace);
+			row.append(copy, actions);
+			list.appendChild(row);
+		}
+		for (const entry of unreadable) {
+			const row = document.createElement("div");
+			row.className = "book-row";
+			const copy = document.createElement("div");
+			copy.className = "book-copy";
+			const title = document.createElement("strong");
+			title.textContent = entry.name;
+			const meta = document.createElement("small");
+			meta.textContent = `Unreadable · ${entry.reason}`;
+			copy.append(title, meta);
+			row.append(copy);
+			list.appendChild(row);
+		}
+	}
+
+	function openLoad (trigger) {
+		loadReturnFocus = trigger ?? document.activeElement;
+		setLoadStatus("");
+		renderLoad();
+		const dialog = $("load-book-dialog");
+		if (!dialog.open) dialog.showModal();
+		const target = $("load-book-list").querySelector("button") ?? $("load-book-dialog").querySelector("[data-close-load]");
+		target?.focus();
+	}
+
+	function closeLoad () {
+		const dialog = $("load-book-dialog");
+		if (!dialog.open) return;
+		dialog.close();
+	}
+
+	function requestReplace (entry, button) {
+		if (loadConfirm?.button === button) {
+			resetLoadConfirm();
+			applyBook(entry, "replace");
+			return;
+		}
+		resetLoadConfirm();
+		// A card "absent from the book" is compared against the stored references, not the
+		// resolved set: an unmatched reference is still part of the book.
+		const bookIds = new Set(entry.book.cards.map(ref => cardbooks.referenceId(ref)));
+		const discarded = [...state.selected.keys()].filter(id => !bookIds.has(id)).length;
+		if (!discarded) {
+			applyBook(entry, "replace");
+			return;
+		}
+		loadConfirm = {name: entry.name, button};
+		state.view.loadConfirm = entry.name;
+		button.textContent = "Confirm replace";
+		button.classList.add("confirming");
+		button.closest(".book-row")?.classList.add("confirming");
+		setLoadStatus(`Replacing will discard ${discarded} selected card${discarded === 1 ? "" : "s"} that are not in "${entry.name}". Activate Confirm replace to continue.`, "warn");
+	}
+
+	function applyBook (entry, mode) {
+		const lookup = cardbooks.entityLookup(state.all, state.config.type);
+		const {resolved, unmatched} = cardbooks.resolveCards(entry.book, lookup);
+		const total = entry.book.cards.length;
+		const unmatchedNote = unmatched.length === total
+			? `All ${total} stored reference${total === 1 ? "" : "s"} could not be found.`
+			: `${unmatched.length} of ${total} stored reference${total === 1 ? "" : "s"} could not be found.`;
+		if (mode === "add" && !resolved.length) {
+			setLoadStatus(`No cards from "${entry.name}" could be found. ${unmatchedNote} Nothing was added.`, "error");
+			return;
+		}
+		if (mode === "replace") state.selected.clear();
+		let added = 0;
+		for (const entity of resolved) {
+			const id = idOf(entity);
+			if (state.selected.has(id)) continue;
+			state.selected.set(id, entity);
+			added++;
+		}
+		updateSelection();
+		const parts = [mode === "replace"
+			? `Replaced the selection with ${resolved.length} card${resolved.length === 1 ? "" : "s"} from "${entry.name}".`
+			: added
+				? `Added ${added} card${added === 1 ? "" : "s"} from "${entry.name}".`
+				: `All ${resolved.length} matching card${resolved.length === 1 ? " was" : "s were"} already selected; nothing was added from "${entry.name}".`];
+		if (unmatched.length) parts.push(unmatchedNote);
+		setLoadStatus(parts.join(" "), unmatched.length ? "warn" : "ok");
+		// A clean load needs no report, so close and return focus to the Load control.
+		// A load with unmatched references keeps the dialog open to show the report.
+		if (!unmatched.length) closeLoad();
 	}
 
 	function setDensity (density) {
@@ -1052,6 +1359,29 @@
 			if (managerReturnFocus?.isConnected) managerReturnFocus.focus();
 			managerReturnFocus = null;
 		});
+		document.querySelectorAll("[data-close-save]").forEach(button => button.addEventListener("click", closeSave));
+		$("save-book-confirm").addEventListener("click", saveBook);
+		$("save-book-name").addEventListener("input", updateSaveState);
+		$("save-book-name").addEventListener("keydown", event => {
+			if (event.key !== "Enter") return;
+			event.preventDefault();
+			saveBook();
+		});
+		$("save-book-dialog").addEventListener("close", () => {
+			resetSaveConfirm();
+			setSaveStatus("");
+			const returnTo = saveReturnFocus;
+			saveReturnFocus = null;
+			deferFocus(returnTo);
+		});
+		document.querySelectorAll("[data-close-load]").forEach(button => button.addEventListener("click", closeLoad));
+		$("load-book-dialog").addEventListener("close", () => {
+			resetLoadConfirm();
+			setLoadStatus("");
+			const returnTo = loadReturnFocus;
+			loadReturnFocus = null;
+			deferFocus(returnTo);
+		});
 		document.querySelectorAll("[data-close-print]").forEach(button => button.addEventListener("click", closePrintSheet));
 		$("print-sheet").addEventListener("close", () => {
 			if (state.view.surface === "print") setSurface(null);
@@ -1157,7 +1487,8 @@
 		$("btn-exit-debug").addEventListener("click", togglePrintDebug);
 		$("btn-toggle-bg").addEventListener("click", toggleBgGraphics);
 		$("print-cards").addEventListener("click", () => window.print());
-		$("save-book").addEventListener("click", saveBook);
+		$("save-book").addEventListener("click", event => openSave(event.currentTarget));
+		$("load-book").addEventListener("click", event => openLoad(event.currentTarget));
 		bindGallery();
 		bindPagesZoom();
 		bindDetailGestures();
