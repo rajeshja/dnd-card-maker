@@ -1920,6 +1920,7 @@ body.print-debug #print-debug-bar {
 }
 
 .back-card {
+    position: relative;
     display: flex;
     flex-direction: column;
     height: 100%;
@@ -1982,12 +1983,27 @@ body.print-debug #print-debug-bar {
 }
 
 .back-indicators {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 1;
     display: flex;
     justify-content: center;
     gap: 2.5mm;
     color: #806e48;
     font-size: 8.2pt;
     font-style: italic
+}
+
+.back-source {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    z-index: 2;
+    color: #806e48;
+    font: 600 6.5pt 'Cinzel', serif;
+    letter-spacing: .08em
 }
 
 .back-meta {

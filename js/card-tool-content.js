@@ -21,6 +21,38 @@ export function spellOrdinal (level) {
 	return level === 0 ? "Cantrip" : `${["", "1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th", "9th"][level]}-level`;
 }
 
+const sortedUnique = values => [...new Set(values)].sort((left, right) => left.localeCompare(right));
+
+// A generated spell lookup entry holds base classes under `class`/`classVariant` and subclass
+// grants under `subclass`; both are keyed by owning class and edition. Base classes win, and
+// edition twins collapse into one short subclass name per owning class.
+export function resolveSpellClasses (entry) {
+	const baseNames = [];
+	for (const group of [entry?.class, entry?.classVariant]) {
+		for (const edition of Object.values(group || {})) baseNames.push(...Object.keys(edition || {}));
+	}
+	const grantsByClass = new Map();
+	for (const edition of Object.values(entry?.subclass || {})) {
+		for (const [className, subclassSources] of Object.entries(edition || {})) {
+			if (!grantsByClass.has(className)) grantsByClass.set(className, []);
+			for (const subclasses of Object.values(subclassSources || {})) grantsByClass.get(className).push(...Object.keys(subclasses || {}));
+		}
+	}
+	const grants = [...grantsByClass.entries()]
+		.map(([className, subclasses]) => ({className, subclasses: sortedUnique(subclasses)}))
+		.sort((left, right) => left.className.localeCompare(right.className));
+	return {classes: sortedUnique(baseNames), grants};
+}
+
+export function spellClassLabel (entry) {
+	const {classes, grants} = resolveSpellClasses(entry);
+	const entries = classes.length ? classes : grants.map(grant => grant.className);
+	const text = classes.length
+		? classes.join(", ")
+		: grants.map(grant => `${grant.className} (${grant.subclasses.join(", ")})`).join(", ") || "—";
+	return {text, singular: entries.length === 1};
+}
+
 export function spellTime (spell) {
 	return spell.time?.[0] ? `${spell.time[0].number} ${spell.time[0].unit}` : "—";
 }
@@ -194,6 +226,8 @@ globalThis.CardToolContent = {
 	DEFAULT_FIT,
 	escapeText,
 	spellOrdinal,
+	resolveSpellClasses,
+	spellClassLabel,
 	spellTime,
 	spellRange,
 	spellDuration,
