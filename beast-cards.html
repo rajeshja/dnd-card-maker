@@ -5,6 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
     <title>Beast Card Printer</title>
+    <link rel="icon" href="favicon.svg" type="image/svg+xml">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link
         href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Crimson+Pro:wght@400;600&display=swap"
@@ -18,28 +19,93 @@
         <div id="overlay-text" class="overlay-text">Loading...</div>
     </div>
     <div id="app">
-        <header id="topbar">
-            <h1 id="page-title"></h1>
-            <div class="topbar-actions"><button id="toggle-browse" class="btn" type="button">Browse</button><button id="save-book" class="btn book-action" type="button" aria-label="Save cardbook"><svg class="btn-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M2.5 2.5h8.2l2.8 2.8v8.2h-11z"/><path d="M5 2.5v4h6v-4M5 13.5v-4h6v4"/></svg><span class="btn-label">Save</span></button><button id="load-book" class="btn book-action" type="button" aria-label="Load cardbook"><svg class="btn-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M1.8 4h4.1l1.5 1.6h6.8v7.2H1.8z"/><path d="M1.8 6.7h12.4"/></svg><span class="btn-label">Load</span></button><button
-                    id="clear-selection" class="btn" type="button">Clear</button><span id="print-actions" hidden><span
-                        id="content-group" class="layout-group content-group" role="group"
-                        aria-label="Content mode"><button class="layout-seg" type="button" data-content="single"
-                            aria-pressed="false">Single card</button><button class="layout-seg" type="button"
-                            data-content="overflow" aria-pressed="true">Overflow</button></span><span id="layout-group"
-                        class="layout-group" role="group" aria-label="Card layout"><button class="layout-seg"
-                            type="button" data-layout="fronts" aria-pressed="true">Fronts</button><button
-                            class="layout-seg" type="button" data-layout="backs"
-                            aria-pressed="false">Backs</button><button class="layout-seg" type="button" data-layout="both"
-                            aria-pressed="false"
-                            title="Print both sides; use the duplex flip that mirrors the sheet left-to-right">Both</button></span><span
-                        id="density-group" class="layout-group" role="group" aria-label="Preview density"><button
-                            class="layout-seg" type="button" data-density="auto"
-                            aria-pressed="true">Auto</button><button class="layout-seg" type="button" data-density="large"
-                            aria-pressed="false">Large</button><button class="layout-seg" type="button" data-density="grid"
-                            aria-pressed="false">Grid</button></span><button id="print-cards" class="btn primary"
-                        type="button">Print</button><button id="debug-print" class="btn" type="button">Debug
-                        Print</button></span></div>
+        <header id="workspace-bar">
+            <div class="workspace-zone workspace-brand"><span class="brand-mark" data-icon="brand" role="img"
+                    aria-label=""></span>
+                <h1 id="page-title"></h1>
+            </div>
+            <div class="workspace-zone workspace-selection"><button id="selection-count-trigger" type="button"
+                    class="count-trigger" aria-label="Manage selection: 0 selected" data-tip="Manage selection"><strong
+                        id="selection-count">0</strong><span class="selection-label"> selected</span></button></div>
+            <div class="workspace-actions"><button id="toggle-browse" class="btn" type="button"
+                    aria-label="Browse cards" data-tip="Browse cards"><span class="btn-icon" data-icon="browse"
+                        aria-hidden="true"></span><span class="btn-label">Browse</span></button>
+                <div class="workspace-zone workspace-book"><button id="save-book" class="btn book-action" type="button"
+                        aria-label="Save cardbook" data-tip="Save cardbook"><span class="btn-icon" data-icon="save"
+                            aria-hidden="true"></span><span class="btn-label">Save</span></button><button id="load-book"
+                        class="btn book-action" type="button" aria-label="Load cardbook" data-tip="Load cardbook"><span
+                            class="btn-icon" data-icon="load" aria-hidden="true"></span><span
+                            class="btn-label">Load</span></button></div>
+                <div id="print-actions" class="workspace-zone workspace-presentation" hidden><span id="content-group" class="dropdown" data-dropdown="content"><button
+                        class="dropdown-trigger" type="button" data-dropdown-trigger aria-haspopup="menu"
+                        aria-expanded="false" aria-label="Content mode: Single card"
+                        data-tip="Content mode: Single card"><span class="dropdown-icon" data-icon="single"
+                            aria-hidden="true"></span><span class="dropdown-label">Single card</span><span
+                            class="dropdown-caret" aria-hidden="true">▾</span></button><span id="content-menu"
+                        class="dropdown-menu" data-menu="content" role="menu" aria-label="Content mode"
+                        popover="manual"><button class="dropdown-item" type="button" role="menuitemradio"
+                            tabindex="-1" aria-checked="true" data-content="single"><span class="dropdown-icon"
+                                data-icon="single" aria-hidden="true"></span><span
+                                class="dropdown-item-name">Single card</span></button><button class="dropdown-item"
+                            type="button" role="menuitemradio" tabindex="-1" aria-checked="false"
+                            data-content="overflow"><span class="dropdown-icon" data-icon="overflow"
+                                aria-hidden="true"></span><span class="dropdown-item-name">Overflow</span></button></span></span><span
+                        id="layout-group" class="dropdown" data-dropdown="layout"><button class="dropdown-trigger"
+                            type="button" data-dropdown-trigger aria-haspopup="menu" aria-expanded="false"
+                            aria-label="Card layout: Fronts" data-tip="Card layout: Fronts"><span
+                                class="dropdown-icon" data-icon="fronts" aria-hidden="true"></span><span
+                                class="dropdown-label">Fronts</span><span class="dropdown-caret"
+                                aria-hidden="true">▾</span></button><span id="layout-menu" class="dropdown-menu"
+                            data-menu="layout" role="menu" aria-label="Card layout" popover="manual"><button
+                                class="dropdown-item" type="button" role="menuitemradio" tabindex="-1"
+                                aria-checked="true" data-layout="fronts"><span class="dropdown-icon" data-icon="fronts"
+                                    aria-hidden="true"></span><span class="dropdown-item-name">Fronts</span></button><button
+                                class="dropdown-item" type="button" role="menuitemradio" tabindex="-1"
+                                aria-checked="false" data-layout="backs"><span class="dropdown-icon" data-icon="backs"
+                                    aria-hidden="true"></span><span class="dropdown-item-name">Backs</span></button><button
+                                class="dropdown-item" type="button" role="menuitemradio" tabindex="-1"
+                                aria-checked="false" data-layout="both"><span class="dropdown-icon" data-icon="both"
+                                    aria-hidden="true"></span><span class="dropdown-item-name">Both</span></button></span></span><span
+                        id="density-group" class="dropdown" data-dropdown="density"><button class="dropdown-trigger"
+                            type="button" data-dropdown-trigger aria-haspopup="menu" aria-expanded="false"
+                            aria-label="Preview density: Auto" data-tip="Preview density: Auto"><span
+                                class="dropdown-icon" data-icon="auto" aria-hidden="true"></span><span
+                                class="dropdown-label">Auto</span><span class="dropdown-caret"
+                                aria-hidden="true">▾</span></button><span id="density-menu" class="dropdown-menu"
+                            data-menu="density" role="menu" aria-label="Preview density" popover="manual"><button
+                                class="dropdown-item" type="button" role="menuitemradio" tabindex="-1"
+                                aria-checked="true" data-density="auto"><span class="dropdown-icon" data-icon="auto"
+                                    aria-hidden="true"></span><span class="dropdown-item-name">Auto</span></button><button
+                                class="dropdown-item" type="button" role="menuitemradio" tabindex="-1"
+                                aria-checked="false" data-density="large"><span class="dropdown-icon" data-icon="large"
+                                    aria-hidden="true"></span><span class="dropdown-item-name">Large</span></button><button
+                                class="dropdown-item" type="button" role="menuitemradio" tabindex="-1"
+                                aria-checked="false" data-density="grid"><span class="dropdown-icon" data-icon="grid"
+                                    aria-hidden="true"></span><span class="dropdown-item-name">Grid</span></button></span></span><span
+                        id="preview-mode-group" class="layout-group" role="group" aria-label="Preview mode"><button
+                            class="layout-seg" type="button" data-preview="cards" aria-pressed="false"
+                            aria-label="Cards view" data-tip="Cards view"><span class="btn-icon" data-icon="single"
+                                aria-hidden="true"></span><span class="layout-seg-label">Cards</span></button><button
+                            class="layout-seg" type="button" data-preview="pages" aria-pressed="true"
+                            aria-label="Pages view" data-tip="Pages view"><span class="btn-icon" data-icon="fronts"
+                                aria-hidden="true"></span><span class="layout-seg-label">Pages</span></button></span><span
+                        id="inspection-side-group" class="layout-group" role="group" aria-label="Inspection side"
+                        hidden><button class="layout-seg" type="button" data-inspect-side="front" aria-pressed="true"
+                            aria-label="Show card fronts" data-tip="Show card fronts"><span class="btn-icon"
+                                data-icon="fronts" aria-hidden="true"></span><span
+                                class="layout-seg-label">Fronts</span></button><button class="layout-seg" type="button"
+                            data-inspect-side="back" aria-pressed="false" aria-label="Show card backs"
+                            data-tip="Show card backs"><span class="btn-icon" data-icon="backs"
+                                aria-hidden="true"></span><span class="layout-seg-label">Backs</span></button></span><button id="print-cards"
+                        class="btn primary" type="button" aria-label="Print" data-tip="Print"><span class="btn-icon"
+                            data-icon="print" aria-hidden="true"></span><span class="btn-label">Print</span></button><button
+                        id="debug-print" class="btn" type="button" aria-label="Debug Print"
+                        data-tip="Debug Print"><span class="btn-icon" data-icon="debug" aria-hidden="true"></span><span
+                            class="btn-label">Debug Print</span></button></div>
+            </div>
         </header>
+        <div id="masthead"><span class="brand-mark" data-icon="brand" role="img" aria-label=""></span><span
+                id="masthead-title" class="masthead-title"></span></div>
         <aside id="sidebar">
             <div class="sidebar-head"><strong>Browse</strong><button id="close-browse" class="dialog-close"
                     type="button" aria-label="Close browse">×</button></div>
@@ -51,17 +117,6 @@
             <div id="entity-list"></div>
         </aside>
         <main id="main">
-            <div id="selection-tray">
-                <span id="selection-status"><strong id="selection-count">0</strong><span class="selection-label"> selected</span></span>
-                <span id="preview-mode-group" class="layout-group" role="group" aria-label="Preview mode"><button
-                        class="layout-seg" type="button" data-preview="cards" aria-pressed="false">Cards</button><button
-                        class="layout-seg" type="button" data-preview="pages" aria-pressed="true">Pages</button></span>
-                <span id="inspection-side-group" class="layout-group" role="group" aria-label="Inspection side"
-                    hidden><button class="layout-seg" type="button" data-inspect-side="front"
-                        aria-pressed="true">Fronts</button><button class="layout-seg" type="button"
-                        data-inspect-side="back" aria-pressed="false">Backs</button></span>
-                <button id="manage-selection" class="btn" type="button">Manage</button>
-            </div>
             <div id="preview-wrap">
                 <div id="placeholder" class="placeholder">
                     <div class="placeholder-icon">🎴</div>
@@ -141,6 +196,7 @@
     <script src="js/card-tool-pages.js" type="module"></script>
     <script src="js/card-tool-layout.js" type="module"></script>
     <script src="js/card-tool-cardbooks.js" type="module"></script>
+    <script src="js/card-tool-icons.js" type="module"></script>
     <script src="js/card-tool.js" type="module"></script>
     <script src="js/beast-cards.js" type="module"></script>
 </body>
