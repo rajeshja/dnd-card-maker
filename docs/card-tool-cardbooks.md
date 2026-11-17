@@ -69,11 +69,11 @@ A load with no unmatched references closes the dialog and returns focus to Load.
 
 ## Dialogs and Chrome
 
-Save and Load are controls in the workspace chrome (the book zone from `redesign-workspace-bar` when it lands; beside each other in the current topbar until then). Both dialogs are modal `<dialog>` elements:
+Save and Load are controls in the workspace bar's book zone. Both dialogs are modal `<dialog>` elements:
 
 - opening moves focus into the dialog (the name field, or the first book action);
 - focus stays inside the dialog while it is open;
 - Escape closes the dialog through the platform cancel behaviour;
 - closing returns focus to the control that opened it.
 
-The current topbar puts both controls side by side in the legacy action cluster as icon-plus-label buttons. At 1200px and wider the label is visible; below that the label is withdrawn and only the icon remains, with the `aria-label` keeping the accessible name, so the pair stays readable and clickable at tablet widths such as 768x1024. Measured in headless Chrome at default zoom with a selection active on all three pages, no topbar control clipped and the bar never scrolled horizontally between 900px and 1440px of CSS width. The placement is still an intermediate state: `redesign-workspace-bar` owns the book zone, and the old layout is intentionally left unchanged until it lands.
+The book zone puts both controls side by side as icon-plus-label buttons. At 1200px and wider the label is visible; below that the label is withdrawn and only the icon remains, with the `aria-label` keeping the accessible name, so the pair stays readable and clickable at tablet widths such as 768x1024. Below 600px the action cluster, including the book zone, moves into the Print sheet, where the labels return because the sheet stacks its controls. Measured in headless Edge at default zoom with a selection active on all three pages, no bar control clipped and the bar never scrolled horizontally from 600px to 1920px of CSS width.
