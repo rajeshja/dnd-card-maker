@@ -39,26 +39,103 @@ button {
     --sidebar-w: clamp(300px, 22vw, 380px);
     display: grid;
     grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
-    grid-template-rows: 56px minmax(0, 1fr);
+    grid-template-rows: 48px minmax(0, 1fr);
     height: 100vh;
     height: 100dvh;
     overflow: hidden
 }
 
-#topbar {
+#workspace-bar,
+#masthead {
     grid-column: 1/-1;
+    grid-row: 1;
+    min-width: 0
+}
+
+#workspace-bar {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
-    padding: 0 1.2rem;
+    gap: .7rem;
+    flex-wrap: nowrap;
+    height: 48px;
+    padding: 0 1rem;
     min-width: 0;
     background: var(--deep);
     border-bottom: 1px solid var(--line)
 }
 
+#workspace-bar>*,
+.workspace-zone {
+    min-width: 0
+}
+
+.workspace-zone {
+    display: flex;
+    align-items: center;
+    gap: .45rem;
+    flex-wrap: nowrap
+}
+
+.workspace-brand {
+    flex: 1 1 auto;
+    overflow: hidden
+}
+
+.workspace-selection {
+    flex: none
+}
+
+/* The action cluster is one node: on phone it moves into the print sheet, so every
+   control keeps exactly one interactive copy. */
+.workspace-actions {
+    display: flex;
+    align-items: center;
+    gap: .55rem;
+    flex: 0 1 auto;
+    flex-wrap: nowrap;
+    min-width: 0;
+    margin-left: auto;
+    padding-left: .7rem;
+    border-left: 1px solid var(--line)
+}
+
+.workspace-book {
+    flex: none
+}
+
+#print-actions {
+    display: flex;
+    align-items: center;
+    gap: .45rem;
+    flex-wrap: nowrap;
+    min-width: 0
+}
+
+#print-actions[hidden] {
+    display: none
+}
+
+.brand-mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    flex: none;
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    background: #1a1509;
+    color: var(--gold)
+}
+
+.brand-mark .ct-icon {
+    width: 24px;
+    height: 24px
+}
+
 #page-title {
     margin: 0;
+    min-width: 0;
     color: var(--gold);
     font: 700 1.05rem 'Cinzel', serif;
     letter-spacing: .1em;
@@ -67,26 +144,52 @@ button {
     text-overflow: ellipsis
 }
 
-.topbar-actions {
-    display: flex;
+#masthead {
+    display: none;
     align-items: center;
-    gap: .45rem;
-    flex-wrap: wrap;
-    justify-content: flex-end;
-    min-width: 0
+    gap: .55rem;
+    height: 48px;
+    padding: 0 .8rem;
+    background: var(--deep);
+    border-bottom: 1px solid var(--line)
+}
+
+.masthead-title {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--gold);
+    font: 700 1rem 'Cinzel', serif;
+    letter-spacing: .08em
 }
 
 #toggle-browse {
     display: none
 }
 
-.count {
-    white-space: nowrap;
-    color: var(--muted)
+.count-trigger {
+    display: inline-flex;
+    align-items: baseline;
+    gap: .3rem;
+    min-width: 0;
+    padding: .36rem .6rem;
+    border: 1px solid var(--gold-dim);
+    border-radius: 2px;
+    background: transparent;
+    color: var(--muted);
+    font: 600 .67rem 'Cinzel', serif;
+    letter-spacing: .04em;
+    white-space: nowrap
 }
 
-.count strong {
+.count-trigger strong {
     color: var(--gold)
+}
+
+.count-trigger:hover {
+    border-color: var(--gold);
+    background: rgba(201, 168, 76, .12)
 }
 
 .btn,
@@ -127,7 +230,19 @@ button {
 .btn-icon {
     width: 16px;
     height: 16px;
-    flex: none;
+    flex: none
+}
+
+[data-icon] {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: none
+}
+
+.ct-icon {
+    width: 16px;
+    height: 16px;
     fill: none;
     stroke: currentColor;
     stroke-width: 1.4;
@@ -135,23 +250,73 @@ button {
     stroke-linejoin: round
 }
 
+/* Degradation ladder. Order: title, then control labels, then the Debug Print label.
+   Never shed: brand mark, selection count, Print. */
 @media (max-width: 1199px) {
-    .book-action {
-        padding: .42rem .5rem
+    .btn-label,
+    .dropdown-label {
+        display: none
     }
 
-    .book-action .btn-label {
+    #workspace-bar .btn,
+    #workspace-bar .book-action,
+    #print-sheet-slot .btn {
+        padding: .42rem .5rem
+    }
+}
+
+@media (min-width: 600px) and (max-width: 899px) {
+    #page-title {
         display: none
+    }
+}
+
+/* Narrow bar: the count loses its "selected" suffix, the dropdowns lose the caret,
+   and the Cards/Pages segments become icon-only. Controls stop shrinking so no
+   icon or label is clipped inside its own button. */
+@media (max-width: 899px) {
+
+    #workspace-bar .btn,
+    #workspace-bar .book-action,
+    #workspace-bar .dropdown,
+    #workspace-bar .layout-group,
+    #print-sheet-slot .btn {
+        flex: none
+    }
+
+    .selection-label,
+    .dropdown-caret,
+    .layout-seg-label {
+        display: none
+    }
+
+    #workspace-bar {
+        gap: .5rem;
+        padding: 0 .65rem
+    }
+
+    .workspace-zone,
+    .workspace-actions,
+    #print-actions {
+        gap: .35rem
+    }
+
+    .workspace-actions {
+        padding-left: .5rem
+    }
+
+    .dropdown-trigger {
+        padding: .36rem .45rem
+    }
+
+    .layout-seg {
+        padding: .38rem .48rem
     }
 }
 
 .layout-group {
     display: inline-flex;
     align-items: stretch
-}
-
-.content-group {
-    margin-right: .35rem
 }
 
 .layout-seg {
@@ -161,7 +326,8 @@ button {
     color: var(--gold);
     padding: .38rem .7rem;
     font: 600 .67rem 'Cinzel', serif;
-    letter-spacing: .05em
+    letter-spacing: .05em;
+    white-space: nowrap
 }
 
 .layout-seg:first-child {
@@ -185,6 +351,129 @@ button {
     border-color: var(--gold);
     background: var(--gold);
     color: var(--deep)
+}
+
+/* Presentation dropdowns: closed trigger shows the active icon and name; the menu
+   is a popover so the top layer escapes #app's clipping. */
+.dropdown {
+    display: inline-flex;
+    align-items: center;
+    min-width: 0
+}
+
+.dropdown-trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: .35rem;
+    min-width: 0;
+    border: 1px solid var(--gold-dim);
+    border-radius: 2px;
+    background: transparent;
+    color: var(--gold);
+    padding: .36rem .55rem;
+    font: 600 .67rem 'Cinzel', serif;
+    letter-spacing: .05em;
+    white-space: nowrap
+}
+
+.dropdown-trigger:hover,
+.dropdown-trigger[aria-expanded="true"] {
+    border-color: var(--gold);
+    background: rgba(201, 168, 76, .12)
+}
+
+.dropdown-caret {
+    color: var(--gold-dim);
+    font-size: .58rem;
+    line-height: 1
+}
+
+.dropdown-menu {
+    position: fixed;
+    inset: auto;
+    margin: 0;
+    z-index: 60;
+    min-width: 168px;
+    max-height: calc(100dvh - 16px);
+    padding: .28rem;
+    overflow: auto;
+    border: 1px solid var(--gold-dim);
+    border-radius: 2px;
+    background: var(--panel);
+    color: var(--text);
+    box-shadow: 0 12px 32px #000b
+}
+
+.dropdown-menu:popover-open,
+.dropdown-menu[data-open="true"] {
+    display: block
+}
+
+.dropdown-menu[hidden] {
+    display: none
+}
+
+.dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    width: 100%;
+    padding: .4rem .5rem;
+    border: 0;
+    border-radius: 2px;
+    background: transparent;
+    color: var(--text);
+    font: 600 .68rem 'Cinzel', serif;
+    letter-spacing: .04em;
+    text-align: left;
+    white-space: nowrap
+}
+
+.dropdown-item:hover,
+.dropdown-item:focus-visible {
+    outline: none;
+    background: rgba(201, 168, 76, .16);
+    color: var(--gold)
+}
+
+.dropdown-item[aria-checked="true"] {
+    background: var(--gold);
+    color: var(--deep)
+}
+
+.dropdown-item[aria-checked="true"]::after {
+    content: "✓";
+    margin-left: auto;
+    padding-left: .5rem
+}
+
+/* Tooltips are CSS-owned so they follow the gold palette and show on keyboard focus. */
+[data-tip] {
+    position: relative
+}
+
+[data-tip]::after {
+    content: attr(data-tip);
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    z-index: 70;
+    padding: .26rem .45rem;
+    border: 1px solid var(--line);
+    border-radius: 2px;
+    background: var(--deep);
+    color: var(--text);
+    font: 500 .62rem 'Crimson Pro', Georgia, serif;
+    letter-spacing: .02em;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .12s ease
+}
+
+[data-tip]:hover::after,
+[data-tip]:focus-visible::after {
+    opacity: 1
 }
 
 #sidebar {
@@ -416,34 +705,6 @@ button {
     overflow: hidden
 }
 
-#selection-tray {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: .75rem;
-    height: 44px;
-    min-height: 44px;
-    padding: 0 .85rem;
-    overflow: hidden;
-    background: var(--deep);
-    border-bottom: 1px solid var(--line)
-}
-
-#selection-status {
-    white-space: nowrap;
-    color: var(--muted);
-    font-size: .78rem
-}
-
-#selection-status strong {
-    color: var(--gold)
-}
-
-#manage-selection {
-    margin-left: auto;
-    white-space: nowrap
-}
-
 #preview-mode-group {
     display: none
 }
@@ -454,10 +715,6 @@ button {
 
 #inspection-side-group:not([hidden]) {
     display: inline-flex
-}
-
-#selection-tray .layout-seg {
-    white-space: nowrap
 }
 
 #preview-wrap {
@@ -1182,11 +1439,24 @@ dialog::backdrop {
     color: var(--paper)
 }
 
-.print-sheet-slot .topbar-actions {
+#print-sheet-slot .workspace-actions {
     display: flex;
     flex-wrap: wrap;
+    align-items: flex-start;
     justify-content: flex-start;
-    gap: .5rem
+    gap: .5rem;
+    margin: 0;
+    padding: 0;
+    border: 0
+}
+
+#print-sheet-slot .workspace-zone,
+#print-sheet-slot #print-actions:not([hidden]) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .5rem;
+    min-width: 0
 }
 
 /* Card detail */
@@ -1377,23 +1647,16 @@ dialog::backdrop {
         padding-bottom: calc(52px + env(safe-area-inset-bottom))
     }
 
-    #topbar {
-        padding: 0 .7rem;
-        padding-top: env(safe-area-inset-top)
+    #workspace-bar {
+        display: none
     }
 
-    #topbar .topbar-actions {
-        display: none
+    #masthead {
+        display: flex
     }
 
     #sidebar {
         width: 100vw
-    }
-
-    #selection-tray {
-        height: 40px;
-        min-height: 40px;
-        padding: 0 .7rem;
     }
 
     #preview-mode-group {
@@ -1422,36 +1685,10 @@ dialog::backdrop {
     #toggle-browse {
         display: none
     }
-}
 
-@media (max-width: 420px) {
-    #selection-tray {
-        gap: .35rem
-    }
-
-    #selection-tray .layout-seg {
-        padding: .34rem .45rem
-    }
-
-    #selection-status {
-        min-width: 0;
-        overflow: hidden;
-        text-overflow: ellipsis
-    }
-
-    #selection-status .selection-label {
-        display: none
-    }
-}
-
-@media (max-height: 820px) {
-    #app {
-        grid-template-rows: 48px minmax(0, 1fr)
-    }
-
-    #selection-tray {
-        height: 40px;
-        min-height: 40px
+    #print-sheet-slot .btn-label,
+    #print-sheet-slot .dropdown-label {
+        display: inline
     }
 }
 

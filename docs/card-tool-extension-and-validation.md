@@ -38,6 +38,32 @@ The responsive shell and card preview require browser checks at 390x844 and 360x
 - the Pages view still matches print order and sides;
 - printing from the gallery or an open detail view produces only card pages.
 
+## Workspace Bar Width Checks
+
+The bar is one 48px row at every height. Any new control, label, breakpoint, or page header change must be measured in a browser with a selection active, at these viewports:
+
+| Viewport | Title | Labels | Count | Print/Save |
+|---|---|---|---|---|
+| 1920x1080 | shown | shown | shown | shown |
+| 1366x768 | shown | shown | shown | shown |
+| 1200x900 | shown | shown | shown | shown |
+| 1024x768 | shown | icons only | shown | shown |
+| 900x768 | shown | icons only | shown | shown |
+| 768x1024 | suppressed | icons only | shown | shown |
+| 600x800 | suppressed | icons only | shown | shown |
+| 390x844 | masthead | Print sheet | hidden with the bar | Print sheet |
+| 360x800 | masthead | Print sheet | hidden with the bar | Print sheet |
+
+At each width where the bar is shown:
+
+- `#workspace-bar` is 48px tall and the only chrome row; `#main` and `#sidebar` start at 48px.
+- Every control's bounding rect stays inside the bar's client rect; no glyph, icon, or label is clipped inside its own button and the bar does not scroll horizontally.
+- The brand mark, count, Print, and Save remain present. The count opens the manager and the manager returns focus to it.
+- At 600-899px, open every presentation dropdown and confirm the full menu and every item are inside the viewport.
+- In Cards view at 600px and 899px, the `Fronts | Backs` inspection toggle is visible and fits.
+
+At 390x844 and 360x800, open the Print sheet and confirm each moved control appears exactly once, is visible inside the sheet, and that the masthead shows the brand mark plus a truncating title. Confirm the three pages share the same bar markup, icon placeholders, and script order up to the page-specific script.
+
 ## Existing 5etools Patterns
 
 The 5etools submodule's generic builder in [makecards.html](../5etools/makecards.html), [js/makecards.js](../5etools/js/makecards.js), and [js/render-card.js](../5etools/js/render-card.js) is a useful reference, not a dependency of the standalone page. It already has item, bestiary, spell, race, background, feat, and optional-feature search adapters, plus a richer `RendererCard` path for entries, lists, tables, variants, and spellcasting blocks. Existing item and bestiary filters are in `5etools/js/filter-items.js` and `5etools/js/filter-bestiary.js`.

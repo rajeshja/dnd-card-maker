@@ -2,11 +2,11 @@
 
 ## Page Shape
 
-The shared engine in `js/card-tool.js` powers the standalone card pages used throughout this repository. `spell-cards.html`, `item-cards.html`, and `beast-cards.html` each configure a `state.config` with page-specific data files, filters, sort rules, and renderers. The generic code handles the shared DOM shell, selection tray, preview, and print pipeline without depending on the normal 5etools page shell or shared `Renderer` modules.
+The shared engine in `js/card-tool.js` powers the standalone card pages used throughout this repository. `spell-cards.html`, `item-cards.html`, and `beast-cards.html` each configure a `state.config` with page-specific data files, filters, sort rules, and renderers. The generic code handles the shared DOM shell, workspace bar, preview, and print pipeline without depending on the normal 5etools page shell or shared `Renderer` modules.
 
 The 5etools source is a git submodule at `5etools/`, pinned to `d2a2616867` (`v2.25.4`). The card tool reads its data from `5etools/data/`; all card-tool code, styles, tests, and back-card assets live in this repository. Do not modify the submodule.
 
-The shell is a responsive workspace with a top bar, filter sidebar, a fixed one-line selection bar, and a preview area. The hidden `#print-area` contains print-ready pages; `#screen-pages` contains the screen preview, which can present either the page grid (`#preview-grid`) or the card gallery (`#cards-gallery`). The DOM-free `js/card-tool-pages.js` module owns strip bucketing, sheet packing, final-sheet padding, per-row back mirroring, per-panel back roles, cut/fold guide roles, and front/back pair ordering. The DOM-free `js/card-tool-layout.js` module owns preview page sizing, gallery and detail derivation, and selection search. The DOM-free `js/card-tool-cardbooks.js` module owns the stored cardbook format, legacy normalisation, reference identity, dedupe, and unmatched resolution. The loading overlay remains visible until the page-specific setup completes.
+The shell is a responsive workspace with one 48px workspace bar, a filter sidebar, and a preview area. The hidden `#print-area` contains print-ready pages; `#screen-pages` contains the screen preview, which can present either the page grid (`#preview-grid`) or the card gallery (`#cards-gallery`). The DOM-free `js/card-tool-pages.js` module owns strip bucketing, sheet packing, final-sheet padding, per-row back mirroring, per-panel back roles, cut/fold guide roles, and front/back pair ordering. The DOM-free `js/card-tool-layout.js` module owns preview page sizing, gallery and detail derivation, and selection search. The DOM-free `js/card-tool-cardbooks.js` module owns the stored cardbook format, legacy normalisation, reference identity, dedupe, and unmatched resolution. The loading overlay remains visible until the page-specific setup completes.
 
 ### Responsive workspace modes
 
@@ -19,17 +19,53 @@ Width modes are CSS-driven and JS reads the same `matchMedia` breakpoints only t
 | Tablet | `600-899px` | overlay Browse surface | full width |
 | Phone | `< 600px` | full-screen Browse surface | full width |
 
-`#app` uses `100dvh` with a `100vh` fallback. `@media (max-height: 820px)` compacts the topbar to 48px and the selection bar to 40px. The sidebar never grows past 380px; on tablet and phone it leaves the normal flow and slides over the preview, and below 900px a topbar Browse button (tablet) or the bottom bar (phone) opens it.
+`#app` uses `100dvh` with a `100vh` fallback and a two-row grid, `48px minmax(0, 1fr)`. Row one is the workspace bar (the phone masthead below 600px), so there is no height-specific compact-chrome rule: one row is one row at every viewport height. The sidebar never grows past 380px; on tablet and phone it leaves the normal flow and slides over the preview. The bar's Browse control opens it on tablet, and the bottom bar's Browse surface opens it on phone.
 
 The sidebar is a three-part column: a search/sort header, a bounded `#filter-groups` region capped at 45% of the sidebar, and `#entity-list`, which keeps a `240px` minimum height and receives all space released by collapsed filters. The list uses a zero flex basis so its very large row count cannot shrink the filter region to a sliver; expanded filters stay scrollable inside their cap. Every filter group is an accordion built from a header button plus the existing `.chips` panel. The header summarizes active state (`all`, `3 of 8`, `none`) while collapsed; chips keep their `data-filter-group`, `data-value`, and `on` semantics, so filtering stays conjunctive and defaults to all values.
 
-The selection area is a 44px bar (40px when vertically compact) showing only the selected count and a Manage action. It never renders per-card chips and never wraps. The topbar no longer repeats the count. Manage opens one `<dialog>` selection manager, styled as a right-side drawer on desktop and a full-height sheet on phone, with search, `N of M shown`, per-card removal, Remove shown, and a two-step Clear all.
+### Workspace bar zones
 
-Save and Load open cardbook dialogs from the topbar's book controls. Until `redesign-workspace-bar` lands they sit side by side in the legacy action cluster as a recorded intermediate state rather than a new layout rule. Above 1200px both controls show an icon plus label; below that the labels are withdrawn and only the icons remain, with the `aria-label` keeping the accessible name. Measured in headless Chrome at default zoom with a selection active on all three pages, the pair does not clip and the bar does not scroll horizontally from 900px to 1440px of CSS width. Both dialogs follow the manager pattern: the opener is recorded as the return target, `showModal()` traps focus, Escape closes, and focus returns to the opening control on close.
+`#workspace-bar` is the only chrome row. It spans both grid columns, stays 48px tall, never wraps, and keeps `min-width: 0` on its children. From left to right:
 
-On phone a fixed bottom action bar exposes Browse, Selected, and Print. Browse uses the sidebar as a full-screen sheet; Selected reuses the selection manager; Print opens a sheet that owns the moved `.topbar-actions` node (content mode, layout, density, Print, Debug Print, Save, Load, Clear). Controls are moved, never cloned, so listeners and `aria-pressed` state stay single-instance. Below 900px the preview can switch between Cards and Pages; phone starts in Cards.
+| Zone | Contents |
+|---|---|
+| Identity | `.brand-mark` (the card-pack symbol from `js/card-tool-icons.js`, `role="img"` labelled with the page title) and `#page-title` |
+| Selection | `#selection-count-trigger`, showing `N selected`; activating it opens the selection manager |
+| Book | `#save-book` and `#load-book` |
+| Actions | `.workspace-actions`: Browse (900px and wider), the three presentation dropdowns, the `Cards \| Pages` preview-mode group, the Cards-only `Fronts \| Backs` inspection toggle, Print, and Debug Print |
+
+The brand mark's `aria-label`, `#page-title`, and `#masthead-title` all come from `state.config.title`, so a new page config needs no shell edits. `favicon.svg` ships the same mark for the browser tab. The count is the manager trigger: there is no separate Manage control and no per-card chip row. With an empty selection the count reads `0` and `#print-actions` is hidden, so the presentation and print controls disappear with it.
+
+### Degradation ladder
+
+The bar never wraps, scrolls, or clips a control. It sheds in this order, and only then tightens spacing:
+
+| Width | Title | Labels | Additional compaction |
+|---|---|---|---|
+| `>= 1200px` | shown | button and dropdown labels shown | none |
+| `900-1199px` | shown | icon-only (`.btn-label` and `.dropdown-label` hidden) | — |
+| `600-899px` | suppressed | icon-only | the count loses its `selected` suffix; dropdown carets and the Cards/Pages segment text hide |
+| `< 600px` | masthead only | — | the bar hides; the masthead shows the brand and title |
+
+Never shed while the bar is shown: the brand mark, the selection count, and Print. Debug Print stays present and activatable at 600px; only its label is withdrawn with the other control labels. A new control must go inside one of the four zones and opt into a rung: it either carries a `.btn-label` that participates in the 1200px rule, or it must be added to the never-shed set deliberately. Fixed controls take `flex: none`, and the identity zone absorbs the remaining width so a long title truncates instead of pushing the mark out.
+
+The selection manager opens from the bar's count, styled as a right-side drawer on desktop and a full-height sheet on phone, with search, `N of M shown`, per-card removal, Remove shown, and a two-step Clear all. The bar never renders one chip per selected card, and the manager returns focus to the count when it closes.
+
+Save and Load open cardbook dialogs from the bar's book zone. At 1200px and wider both controls show an icon plus label; below that the labels are withdrawn and only the icons remain, with the `aria-label` keeping the accessible name. Measured in headless Edge at default zoom with a selection active on all three pages, the bar fits without clipping a control or scrolling horizontally from 600px to 1920px of CSS width; below 600px the action cluster moves into the Print sheet. Both dialogs follow the manager pattern: the opener is recorded as the return target, `showModal()` traps focus, Escape closes, and focus returns to the opening control on close.
+
+On phone a fixed bottom action bar exposes Browse, Selected, and Print. Browse uses the sidebar as a full-screen sheet; Selected reuses the selection manager; Print opens a sheet that owns the moved `.workspace-actions` node (content mode, layout, density, `Cards | Pages`, `Fronts | Backs`, Print, Debug Print, Save, Load). Only the action cluster is moved: the brand and title become `#masthead`, and the selection cluster simply hides with the bar. Controls are moved, never cloned, so listeners and `aria-pressed` state stay single-instance. Below 900px the preview can switch between Cards and Pages; phone starts in Cards.
 
 The detail view is a full-screen `<dialog>` fed by the same print-card clones as the gallery. It opens on the side the gallery is inspecting, and its flip is offered under every layout whenever the card's other side has been prepared, so inspecting a back never requires changing the print layout. It is presentation-only: opening, flipping, zooming, or navigating never writes `#print-area`, selection, layout, content mode, density, or sort order, and its state (`detailIndex`, `detailSide`, pinch zoom) is discarded when it closes. A side the print plan did not render is recorded on first demand by a detached pass that is fitted, copied into `state.printCards`, and removed before printing.
+
+## Presentation Dropdowns
+
+Content mode, card layout, and preview density are menus, not segmented groups. Each group keeps its container id (`#content-group`, `#layout-group`, `#density-group`), its `data-content` / `data-layout` / `data-density` option buttons, and gains one trigger (`[data-dropdown-trigger]`) plus one menu (`#content-menu`, `#layout-menu`, `#density-menu`). Option values, full names, and icon ids come from `js/card-tool-icons.js`, so the menu markup, the closed trigger, and the unit tests cannot drift.
+
+- **Closed:** the trigger shows the active option's icon and name and carries `aria-haspopup="menu"`, `aria-expanded="false"`, and an accessible name of `<Group>: <Active name>`, for example `Card layout: Fronts`. `data-tip` mirrors that name for the CSS tooltip.
+- **Open:** `aria-expanded="true"`, the menu has `role="menu"`, and every option is a `role="menuitemradio"` button with `aria-checked`; exactly one option is checked. Choosing an option applies it, updates the trigger, and closes the menu.
+- **Icon-only form:** below 1200px CSS hides `.dropdown-label`. The trigger keeps its icon, accessible name, and tooltip, so the visible label is never the only carrier of the active value.
+- **Keyboard:** Enter/Space opens on the active option, ArrowDown/ArrowUp open and move between options, Home/End jump to the first and last, Enter/Space chooses the focused option, Escape closes and returns focus to the trigger, and a pointer press outside closes the menu.
+- **Rendering:** each menu is a `popover="manual"` element, so the top layer escapes `#app`'s clipping. Without the Popover API the same element is shown as a fixed-position box positioned from the trigger rect and clamped to the viewport; `openDropdown()` feature-detects and both paths keep the menu fully visible at 600px.
 
 ## Cardbook Dialogs
 
@@ -78,7 +114,7 @@ The list is filtered independently from selection, so changing filters does not 
 
 Cardbook dialogs keep their return-focus target outside `state` (`saveReturnFocus`, `loadReturnFocus`) so the detail and manager surfaces can keep their own targets. Loading a book never writes `state.layout`, `state.contentMode`, `state.view.density`, or the page plan directly: it changes only `state.selected`, then calls `updateSelection()` once. The active sort therefore applies to the loaded cards at render, and the front/back print order is rebuilt through the normal `buildPreview()` path. Selecting, sorting, printing, and pagination behave exactly as they do for a hand-picked selection.
 
-Inspection order equals print order. The gallery and detail view dedupe `state.inspectPlan` in plan order, which is the card sequence the print plan packs onto its sheets; duplex mirroring changes only where a back cell sits, never which cards are inspected. The inspection side is ephemeral screen state: `state.view.inspectSide` is owned by the gallery side toggle in the selection tray, `state.view.detailSide` by the open detail view, both reset from `state.layout` when the layout changes and when the preview closes, and neither is written to a cardbook or to the print document.
+Inspection order equals print order. The gallery and detail view dedupe `state.inspectPlan` in plan order, which is the card sequence the print plan packs onto its sheets; duplex mirroring changes only where a back cell sits, never which cards are inspected. The inspection side is ephemeral screen state: `state.view.inspectSide` is owned by the `Fronts | Backs` toggle in the workspace bar's action cluster, `state.view.detailSide` by the open detail view, both reset from `state.layout` when the layout changes and when the preview closes, and neither is written to a cardbook or to the print document.
 
 There is no URL, hash, History API, or session-state integration. The card tools are intentionally simple, local-first interfaces that persist only named books via browser storage. Preview mode, density, filter expansion, manager search, open surfaces, and detail position are reload-scoped.
 

@@ -34,8 +34,8 @@
 	const pagePlan = globalThis.CardToolPages;
 	const layoutTool = globalThis.CardToolLayout;
 	const cardbooks = globalThis.CardToolCardbooks;
+	const icons = globalThis.CardToolIcons;
 	const phoneQuery = window.matchMedia("(max-width: 599px)");
-	const compactHeightQuery = window.matchMedia("(max-height: 820px)");
 
 	let managerReturnFocus = null;
 	let saveReturnFocus = null;
@@ -49,6 +49,7 @@
 	let detailZoom = 1;
 	let resetPagesZoom = () => {};
 	let frame = 0;
+	let openMenu = null;
 
 	function idOf (entity) {
 		return `${state.config.type}|${entity.name}|${entity.source}`;
@@ -182,29 +183,182 @@
 	}
 
 	function updateSelection () {
-		$("selection-count").textContent = state.selected.size;
-		$("mobile-selected-count").textContent = state.selected.size;
+		const count = state.selected.size;
+		$("selection-count").textContent = count;
+		$("mobile-selected-count").textContent = count;
+		const trigger = $("selection-count-trigger");
+		if (trigger) {
+			const label = `Manage selection: ${count} selected`;
+			trigger.setAttribute("aria-label", label);
+			trigger.dataset.tip = label;
+		}
 		renderList();
 		if (state.view.surface === "selected" && $("selection-manager").open) renderManager();
 		if (state.selected.size) buildPreview();
 		else hidePreview();
 	}
 
-	function updateLayoutButtons () {
-		document.querySelectorAll("#layout-group [data-layout]").forEach(button => {
-			button.setAttribute("aria-pressed", String(button.dataset.layout === state.layout));
+	function updateGroupButtons (group, value) {
+		const option = icons.activeOption(group, value);
+		if (!option) return;
+		document.querySelectorAll(`#${group}-group [data-${group}]`).forEach(button => {
+			button.setAttribute("aria-checked", String(button.dataset[group] === value));
 		});
+		const trigger = document.querySelector(`#${group}-group [data-dropdown-trigger]`);
+		if (!trigger) return;
+		const label = icons.triggerLabel(group, value);
+		trigger.setAttribute("aria-label", label);
+		trigger.dataset.tip = label;
+		const labelHost = trigger.querySelector(".dropdown-label");
+		if (labelHost) labelHost.textContent = option.name;
+		icons.renderIcon(trigger.querySelector("[data-icon]"), option.icon);
+	}
+
+	function updateLayoutButtons () {
+		updateGroupButtons("layout", state.layout);
 	}
 
 	function updateContentButtons () {
-		document.querySelectorAll("#content-group [data-content]").forEach(button => {
-			button.setAttribute("aria-pressed", String(button.dataset.content === state.contentMode));
-		});
+		updateGroupButtons("content", state.contentMode);
 	}
 
 	function updateDensityButtons () {
-		document.querySelectorAll("#density-group [data-density]").forEach(button => {
-			button.setAttribute("aria-pressed", String(button.dataset.density === state.view.density));
+		updateGroupButtons("density", state.view.density);
+	}
+
+	function triggerFor (group) {
+		return document.querySelector(`#${group}-group [data-dropdown-trigger]`);
+	}
+
+	function menuFor (group) {
+		return $(`${group}-menu`);
+	}
+
+	function menuItems (menu) {
+		return [...(menu?.querySelectorAll("[role='menuitemradio']") ?? [])];
+	}
+
+	// The menu is a popover so the top layer does the escaping; its position still comes
+	// from the trigger rect because the UA centre placement is not the contract here.
+	function positionMenu (group) {
+		const trigger = triggerFor(group);
+		const menu = menuFor(group);
+		if (!trigger || !menu) return;
+		const rect = trigger.getBoundingClientRect();
+		const gap = 4;
+		const margin = 8;
+		menu.style.position = "fixed";
+		menu.style.margin = "0";
+		menu.style.minWidth = `${Math.max(rect.width, 168)}px`;
+		const width = menu.offsetWidth || Math.max(rect.width, 168);
+		const height = menu.offsetHeight || 0;
+		menu.style.left = `${Math.max(margin, Math.min(rect.left, window.innerWidth - width - margin))}px`;
+		let top = rect.bottom + gap;
+		if (top + height > window.innerHeight - margin && rect.top - gap - height >= margin) top = rect.top - gap - height;
+		menu.style.top = `${Math.max(margin, Math.min(top, window.innerHeight - height - margin))}px`;
+	}
+
+	function openDropdown (group, edge = "selected") {
+		const trigger = triggerFor(group);
+		const menu = menuFor(group);
+		if (!trigger || !menu) return;
+		if (openMenu && openMenu !== group) closeDropdown();
+		if (typeof menu.showPopover === "function") {
+			if (!menu.matches(":popover-open")) menu.showPopover();
+		} else {
+			menu.hidden = false;
+		}
+		menu.dataset.open = "true";
+		openMenu = group;
+		trigger.setAttribute("aria-expanded", "true");
+		positionMenu(group);
+		document.addEventListener("pointerdown", onMenuPointerDown, true);
+		window.addEventListener("resize", onMenuResize, true);
+		const items = menuItems(menu);
+		const checked = items.find(item => item.getAttribute("aria-checked") === "true") ?? items[0];
+		const target = edge === "last" ? items[items.length - 1] : checked;
+		target?.focus();
+	}
+
+	function closeDropdown ({restoreFocus = false} = {}) {
+		if (!openMenu) return;
+		const group = openMenu;
+		const trigger = triggerFor(group);
+		const menu = menuFor(group);
+		openMenu = null;
+		document.removeEventListener("pointerdown", onMenuPointerDown, true);
+		window.removeEventListener("resize", onMenuResize, true);
+		if (menu) {
+			delete menu.dataset.open;
+			if (typeof menu.hidePopover === "function" && menu.matches(":popover-open")) menu.hidePopover();
+			else menu.hidden = true;
+		}
+		trigger?.setAttribute("aria-expanded", "false");
+		if (restoreFocus) trigger?.focus();
+	}
+
+	function onMenuPointerDown (event) {
+		if (!openMenu) return;
+		if (event.target?.closest?.("[data-dropdown]")) return;
+		closeDropdown();
+	}
+
+	function onMenuResize () {
+		closeDropdown();
+	}
+
+	function moveMenuFocus (menu, delta) {
+		const items = menuItems(menu);
+		if (!items.length) return;
+		const current = items.indexOf(document.activeElement);
+		items[(current + delta + items.length) % items.length].focus();
+	}
+
+	function bindDropdown (group) {
+		const trigger = triggerFor(group);
+		const menu = menuFor(group);
+		if (!trigger || !menu) return;
+		if (typeof menu.showPopover !== "function") menu.hidden = true;
+		trigger.addEventListener("click", () => {
+			if (openMenu === group) closeDropdown();
+			else openDropdown(group);
+		});
+		trigger.addEventListener("keydown", event => {
+			if (event.key === "Enter" || event.key === " " || event.key === "Spacebar") {
+				event.preventDefault();
+				if (openMenu === group) closeDropdown({restoreFocus: true});
+				else openDropdown(group);
+			} else if (event.key === "ArrowDown") {
+				event.preventDefault();
+				openDropdown(group);
+			} else if (event.key === "ArrowUp") {
+				event.preventDefault();
+				openDropdown(group, "last");
+			}
+		});
+		menu.addEventListener("keydown", event => {
+			if (event.key === "Escape") {
+				event.preventDefault();
+				event.stopPropagation();
+				closeDropdown({restoreFocus: true});
+			} else if (event.key === "ArrowDown") {
+				event.preventDefault();
+				moveMenuFocus(menu, 1);
+			} else if (event.key === "ArrowUp") {
+				event.preventDefault();
+				moveMenuFocus(menu, -1);
+			} else if (event.key === "Home") {
+				event.preventDefault();
+				menuItems(menu)[0]?.focus();
+			} else if (event.key === "End") {
+				event.preventDefault();
+				menuItems(menu).at(-1)?.focus();
+			} else if (event.key === "Enter" || event.key === " " || event.key === "Spacebar") {
+				event.preventDefault();
+				if (document.activeElement?.closest?.("[data-dropdown]")) document.activeElement.click();
+			} else if (event.key === "Tab") {
+				closeDropdown();
+			}
 		});
 	}
 
@@ -642,6 +796,7 @@
 	}
 
 	function hidePreview () {
+		closeDropdown();
 		resetPagesZoom();
 		$("placeholder").hidden = false;
 		$("screen-pages").hidden = true;
@@ -775,11 +930,6 @@
 			}
 		});
 		if (isPrint) root.classList.remove("fit-measure");
-	}
-
-	function clearSelection () {
-		state.selected.clear();
-		updateSelection();
 	}
 
 	function entityNoun () {
@@ -1144,8 +1294,8 @@
 		button.classList.remove("confirming");
 	}
 
-	function openManager () {
-		managerReturnFocus = document.activeElement;
+	function openManager (trigger) {
+		managerReturnFocus = trigger ?? document.activeElement;
 		state.view.manageQuery = "";
 		$("manager-search").value = "";
 		resetClearConfirm();
@@ -1163,7 +1313,7 @@
 
 	function openPrintSheet () {
 		if (!isPhone()) return;
-		syncTopbarActions();
+		syncWorkspaceActions();
 		setSurface("print");
 		const dialog = $("print-sheet");
 		if (!dialog.open) dialog.showModal();
@@ -1189,10 +1339,10 @@
 		else delete document.body.dataset.surface;
 	}
 
-	function syncTopbarActions () {
-		const actions = document.querySelector(".topbar-actions");
+	function syncWorkspaceActions () {
+		const actions = document.querySelector(".workspace-actions");
 		if (!actions) return;
-		const host = isPhone() ? $("print-sheet-slot") : $("topbar");
+		const host = isPhone() ? $("print-sheet-slot") : $("workspace-bar");
 		if (actions.parentElement !== host) host.appendChild(actions);
 	}
 
@@ -1419,7 +1569,7 @@
 	}
 
 	function bindDialogs () {
-		$("manage-selection").addEventListener("click", openManager);
+		$("selection-count-trigger").addEventListener("click", event => openManager(event.currentTarget));
 		document.querySelectorAll("[data-close-manager]").forEach(button => button.addEventListener("click", closeManager));
 		$("manager-search").addEventListener("input", event => {
 			state.view.manageQuery = event.target.value;
@@ -1523,10 +1673,10 @@
 			else if (surface === "selected") openManager();
 			else if (surface === "print") openPrintSheet();
 		});
-		syncTopbarActions();
+		syncWorkspaceActions();
 		if (typeof phoneQuery.addEventListener === "function") {
 			phoneQuery.addEventListener("change", () => {
-				syncTopbarActions();
+				syncWorkspaceActions();
 				if (isPhone()) setPreviewMode("cards");
 			});
 		}
@@ -1540,6 +1690,8 @@
 	}
 
 	function start (config) {
+		icons.installSprite();
+		icons.hydrateIcons();
 		state.config = { ...config, page: { rows: 2, columns: 4, orientation: "landscape", ...config.page } };
 		state.contentMode = state.config.defaultContentMode || "single";
 		state.layout = "fronts";
@@ -1548,18 +1700,20 @@
 		resetInspectionSide();
 		document.body.classList.toggle("page-portrait", state.config.page.orientation === "portrait");
 		$("page-title").textContent = config.title;
+		$("masthead-title").textContent = config.title;
+		document.querySelectorAll(".brand-mark").forEach(mark => mark.setAttribute("aria-label", config.title));
 		$("query").placeholder = `${config.entityLabel} name...`;
 		$("sort").innerHTML = config.sortOptions.map(option => `<option value="${esc(option.value)}">${esc(option.label)}</option>`).join("");
 		$("query").addEventListener("input", filter);
 		$("sort").addEventListener("change", filter);
 		$("select-visible").addEventListener("click", () => { state.filtered.forEach(entity => state.selected.set(idOf(entity), entity)); updateSelection(); });
-		$("clear-selection").addEventListener("click", clearSelection);
 		$("layout-group").addEventListener("click", event => {
 			const button = event.target.closest("[data-layout]");
 			if (!button) return;
 			state.layout = button.dataset.layout;
 			resetInspectionSide();
 			updateLayoutButtons();
+			closeDropdown({restoreFocus: true});
 			if (state.selected.size) buildPreview();
 		});
 		$("inspection-side-group")?.addEventListener("click", event => {
@@ -1571,20 +1725,23 @@
 			if (!button) return;
 			state.contentMode = button.dataset.content;
 			updateContentButtons();
+			closeDropdown({restoreFocus: true});
 			if (state.selected.size) buildPreview();
 		});
 		$("density-group").addEventListener("click", event => {
 			const button = event.target.closest("[data-density]");
-			if (button) setDensity(button.dataset.density);
+			if (!button) return;
+			setDensity(button.dataset.density);
+			closeDropdown({restoreFocus: true});
 		});
 		$("preview-mode-group").addEventListener("click", event => {
 			const button = event.target.closest("[data-preview]");
 			if (button) setPreviewMode(button.dataset.preview);
 		});
-		$("debug-print").addEventListener("click", togglePrintDebug);
+		$("debug-print").addEventListener("click", () => { closeDropdown(); togglePrintDebug(); });
 		$("btn-exit-debug").addEventListener("click", togglePrintDebug);
 		$("btn-toggle-bg").addEventListener("click", toggleBgGraphics);
-		$("print-cards").addEventListener("click", () => window.print());
+		$("print-cards").addEventListener("click", () => { closeDropdown(); window.print(); });
 		$("save-book").addEventListener("click", event => openSave(event.currentTarget));
 		$("load-book").addEventListener("click", event => openLoad(event.currentTarget));
 		bindGallery();
@@ -1593,6 +1750,7 @@
 		bindDialogs();
 		bindMobile();
 		bindResize();
+		["content", "layout", "density"].forEach(bindDropdown);
 		updateLayoutButtons();
 		updateContentButtons();
 		updateDensityButtons();
