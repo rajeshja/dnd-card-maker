@@ -8,7 +8,7 @@ Lets the shared card tool preview and print card fronts, card backs, or interlea
 
 ### Requirement: Layout selection drives preview and print
 
-The card tool SHALL offer exactly three card layouts: Fronts, Backs, and Both. The active layout SHALL determine the page preview, the card-level preview sides, and the next print document. Every card tool SHALL start in the Fronts layout. All three presentations SHALL derive from the same page plan, and changing which presentation is visible SHALL NOT change selection, card content, page sequence, or page geometry.
+The card tool SHALL offer three layouts, Fronts, Backs, and Both, and SHALL start in Fronts. The active layout SHALL determine the page preview and the next print document. All three presentations SHALL derive from the same page plan, and switching presentation SHALL NOT change selection, card content, page sequence, or page geometry. Card-level inspection surfaces MAY show either side, and the layout SHALL set only their default side.
 
 #### Scenario: Initial layout
 
@@ -20,7 +20,7 @@ The card tool SHALL offer exactly three card layouts: Fronts, Backs, and Both. T
 
 - **WHEN** the user selects the Backs layout
 - **THEN** the page preview shows only mirrored back pages
-- **AND** card-level previews show card backs
+- **AND** card-level previews default to card backs
 - **AND** no front page is visible
 
 #### Scenario: Switching to Both
@@ -39,6 +39,11 @@ The card tool SHALL offer exactly three card layouts: Fronts, Backs, and Both. T
 - **WHEN** the user switches between the page preview, the card gallery, and the card detail view
 - **THEN** the active layout remains unchanged
 - **AND** the printed document would remain unchanged
+
+#### Scenario: Card-level inspection does not change print
+
+- **WHEN** the user inspects card fronts while the layout is Backs
+- **THEN** the next print document still contains back pages only
 
 ### Requirement: Interleaved page order
 
@@ -107,7 +112,7 @@ Every back page SHALL reverse the panel order within each row of its paired fron
 
 ### Requirement: Preview and Debug Print match the print document
 
-The page preview and Debug Print SHALL show the same page sequence and the same side for every page as the print document generated for the active layout. The tool SHALL NOT expose a page-preview state that shows a side the print action would not print. This parity requirement applies to the desktop page preview, the large-screen page grid, and the mobile Pages view. A card gallery or card detail view MAY present individual cards instead of pages, but SHALL be derived from the same page plan and SHALL NOT substitute for the page preview when verifying print order, page sides, or duplex pairing.
+The desktop page preview, the large-screen page grid, the mobile Pages view, and Debug Print SHALL show the same page sequence and the same side for every page as the print document for the active layout, and none SHALL expose a side the print action would not print. A card gallery or card detail view MAY show either side of an individual card without changing the page preview or the print document, but SHALL derive from the same page plan and SHALL NOT substitute for page verification.
 
 #### Scenario: Both layout parity
 
@@ -152,6 +157,12 @@ The page preview and Debug Print SHALL show the same page sequence and the same 
 - **WHEN** the user changes the preview density on a large screen
 - **THEN** the print document keeps the same page sequence, sides, and geometry
 
+#### Scenario: Card-level sides do not imply parity
+
+- **WHEN** the layout is Fronts and a card back is shown in the detail view
+- **THEN** that back is not presented as part of the print preview
+- **AND** the page preview continues to show front pages only
+
 ### Requirement: Sheet labels express front/back pairing
 
 Each preview page SHALL be labeled with a physical sheet number and its side so pairing can be checked before printing. Front and back pages belonging to the same chunk SHALL carry the same sheet number.
@@ -190,13 +201,24 @@ The print action SHALL print the active layout and SHALL NOT change the active l
 
 ### Requirement: Single layout control and two print actions
 
-The card tool SHALL expose the layout as one three-state control labeled Fronts, Backs, and Both, plus a Print action and a Debug Print action. The separate Print backs and Show backs controls SHALL be removed.
+The card tool SHALL expose the layout as one three-state dropdown control whose closed label is the active layout, plus a Print action and a Debug Print action. The dropdown SHALL offer exactly Fronts, Backs, and Both, and SHALL mark the active one. The separate Print backs and Show backs controls SHALL remain removed.
 
 #### Scenario: Control set
 
 - **WHEN** at least one card is selected
-- **THEN** the toolbar shows the three-state layout control, Print, and Debug Print
+- **THEN** the workspace bar shows the layout dropdown, Print, and Debug Print
 - **AND** no Print backs or Show backs control is present
+
+#### Scenario: Active layout is the closed label
+
+- **WHEN** the layout is Both
+- **THEN** the closed layout control shows Both
+
+#### Scenario: All three layouts remain available
+
+- **WHEN** the user opens the layout dropdown
+- **THEN** Fronts, Backs, and Both are all offered
+- **AND** exactly one is marked as active
 
 ### Requirement: Card rendering and page geometry stay fixed
 

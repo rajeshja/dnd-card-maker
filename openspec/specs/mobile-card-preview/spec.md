@@ -7,7 +7,7 @@ Defines the card-level preview surfaces used on phones and other narrow viewport
 
 ### Requirement: Card gallery is the default mobile preview
 
-On phone viewports the preview SHALL default to a card gallery. The gallery SHALL be derived from the same page plan as the page preview and SHALL preserve plan order. It SHALL group tiles by sheet and label each group with its side (Fronts, Backs, or Fronts and Backs under the Both layout). It SHALL render one tile per logical card, SHALL omit empty padding positions, and SHALL badge a card that occupies more than one panel. A selected card SHALL NOT be repeated once per panel.
+On phone viewports the preview SHALL default to a card gallery. The gallery SHALL be derived from the same page plan as the page preview and SHALL preserve plan order. It SHALL group tiles by sheet and label each group with the side it is currently displaying. It SHALL render one tile per logical card, SHALL omit empty padding positions, and SHALL badge a card that occupies more than one panel. A selected card SHALL NOT be repeated once per panel.
 
 #### Scenario: Gallery groups by sheet
 
@@ -35,6 +35,12 @@ On phone viewports the preview SHALL default to a card gallery. The gallery SHAL
 
 - **WHEN** the viewport is 390x844 or 360x800
 - **THEN** the preview defaults to the card gallery
+
+#### Scenario: Headings name the displayed side
+
+- **WHEN** the gallery is showing backs under the Both layout
+- **THEN** every group heading names the back side
+- **AND** no heading claims a side that is not displayed
 
 ### Requirement: Gallery tiles preserve print geometry
 
@@ -144,26 +150,6 @@ A multi-panel card SHALL stack its panels vertically in the detail view, each at
 
 - **WHEN** the user swipes horizontally on a multi-panel card
 - **THEN** the detail view moves to the previous or next card
-
-### Requirement: Detail view follows the active layout
-
-The detail view SHALL follow the active layout. Under Fronts the detail view SHALL open on the card front and SHALL NOT offer a back side. Under Backs it SHALL open on the card back. Under Both it SHALL offer a front/back flip for the same card.
-
-#### Scenario: Fronts hides the flip
-
-- **WHEN** the active layout is Fronts
-- **THEN** no front/back flip control is shown
-
-#### Scenario: Backs opens on the back
-
-- **WHEN** the active layout is Backs
-- **THEN** the detail view shows the card back
-
-#### Scenario: Both flips the same card
-
-- **WHEN** the active layout is Both and the user flips a card
-- **THEN** the same card's other side is shown
-- **AND** the card position does not change
 
 ### Requirement: Detail view supports inspection zoom
 
