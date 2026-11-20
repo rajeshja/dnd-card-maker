@@ -97,6 +97,8 @@ The printer must flip the sheet left-to-right for backs to land behind their own
 
 `fitRenderedCards()` measures screen and print cards after every preview build, reducing titles and body text while preserving readable layout inside each card. Body fitting starts at the card's `data-content-pt` size when the flow adapter set one, so the chosen ladder size is not silently undone. Back faces have no body fit step: only their titles are fitted, and the back meta block is never measured, compacted, or truncated. The top-right source stamp is plain text outside that flow, so it is never measured or fitted either. Print fitting temporarily applies `#print-area.fit-measure` when print markup is hidden, and Debug Print refits `#print-area` when it opens. The fitter never grows text above the flow size; the smaller screen preview may shrink a card further when it cannot reproduce the print box at print size.
 
+Spell front and back titles that contain `/` break immediately after the slash, including in Debug Print and browser Print. Spell slash titles do not wrap elsewhere; item and beast titles retain their existing layout behavior.
+
 Card typography is viewport-independent. `.screen-page`, `.card`, and the gallery/detail card hosts establish an inline-size container, and the entity title clamp resolves against the card width (`clamp(9pt, 2cqw, 14pt)`) with a `12pt` fallback for browsers without container queries. Because gallery and detail clones keep the print card width before scaling, their computed title size matches print at every viewport.
 
 These values are layout policy, not data; adjust only with preview and print checks.

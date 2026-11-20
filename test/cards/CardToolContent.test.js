@@ -5,6 +5,7 @@ import {
 	lineHeightFor,
 	renderUnits,
 	sentenceUnits,
+	spellTitleHtml,
 	spellFlow,
 	spellPanel,
 	spellUnits,
@@ -117,6 +118,19 @@ describe("lineHeightFor", () => {
 });
 
 describe("spellPanel", () => {
+	it("adds an escaped slash line break only to spell title HTML", () => {
+		expect(spellTitleHtml("Acid/Fog <R&D>")).toBe("Acid/<br>Fog &lt;R&amp;D&gt;");
+		expect(spellTitleHtml("Unspaced Title")).toBe("Unspaced Title");
+	});
+
+	it("renders Antipathy/Sympathy on separate lines in generated panels", () => {
+		const html = spellPanel(spell([], {name: "Antipathy/Sympathy"}), [], {title: spellTitleHtml("Antipathy/Sympathy")});
+		const singleLineHtml = spellPanel(spell([]), [], {title: spellTitleHtml("Test Spell")});
+
+		expect(html).toContain('class="entity-title spell-title spell-slash-title">Antipathy/<br>Sympathy');
+		expect(singleLineHtml).toContain('class="entity-title spell-title">Test Spell');
+	});
+
 	it("drops the meta block on continuation panels", () => {
 		const first = spellPanel(spell([]), [], {title: "Test Spell", metaHtml: "<div class=\"spell-meta\">META</div>"});
 		const next = spellPanel(spell([]), [], {title: "Test Spell", metaHtml: "<div class=\"spell-meta\">META</div>", continuation: true});

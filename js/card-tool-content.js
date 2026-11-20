@@ -15,6 +15,8 @@ export const DEFAULT_FIT = Object.freeze({
 
 export const escapeText = value => String(value ?? "").replace(/[&<>"']/g, char => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;"}[char]));
 
+export const spellTitleHtml = name => escapeText(name).replace(/\//g, "/<br>");
+
 const fitFor = fit => fit ?? globalThis.CardToolUtils?.CARD_FIT?.description ?? DEFAULT_FIT;
 
 export function spellOrdinal (level) {
@@ -155,7 +157,8 @@ export function spellPanel (spell, units, {continuation = false, ellipsis = fals
 	const suffix = continuation ? `<span class="spell-title-indicator">contd.</span>` : indicatorsHtml;
 	const meta = continuation ? "" : metaHtml;
 	const metaBlock = meta ? `${meta}<hr class="spell-divider">` : "";
-	return `<div class="card-inner school-${escapeText(spell.school || "")}" data-content-pt="${fontPt}"><article class="entity-card spell-card"><h1 class="entity-title spell-title">${title}${suffix}</h1><hr class="spell-divider">${metaBlock}<div class="entity-body spell-description" style="font-size:${fontPt}pt;line-height:${lineHeight}">${renderUnits(units, {ellipsis})}</div></article></div>`;
+	const slashTitleClass = String(spell.name ?? "").includes("/") ? " spell-slash-title" : "";
+	return `<div class="card-inner school-${escapeText(spell.school || "")}" data-content-pt="${fontPt}"><article class="entity-card spell-card"><h1 class="entity-title spell-title${slashTitleClass}">${title}${suffix}</h1><hr class="spell-divider">${metaBlock}<div class="entity-body spell-description" style="font-size:${fontPt}pt;line-height:${lineHeight}">${renderUnits(units, {ellipsis})}</div></article></div>`;
 }
 
 export function itemPanel (item, units, {continuation = false, ellipsis = false, fontPt = 9.8, title = "", metaHtml = "", lineHeight = 1.3} = {}) {
@@ -167,7 +170,7 @@ export function itemPanel (item, units, {continuation = false, ellipsis = false,
 export function spellCard (spell, fit = fitFor()) {
 	return spellPanel(spell, spellUnits(spell), {
 		fontPt: fit.defaultPt,
-		title: escapeText(spell.name),
+		title: spellTitleHtml(spell.name),
 		indicatorsHtml: spellIndicators(spell),
 		metaHtml: spellMetaHtml(spell),
 		lineHeight: fit.defaultLineHeight,
@@ -189,7 +192,7 @@ export function spellFlow (spell, {mode, page, measure, fit = fitFor()}) {
 		fontPt,
 		continuation,
 		ellipsis,
-		title: escapeText(spell.name),
+		title: spellTitleHtml(spell.name),
 		indicatorsHtml: spellIndicators(spell),
 		metaHtml: spellMetaHtml(spell),
 		lineHeight: lineHeightFor(fontPt, fit.defaultPt, floorPt, fit.defaultLineHeight, fit.minLineHeight),
@@ -225,6 +228,7 @@ globalThis.CardToolContent = {
 	SCHOOLS,
 	DEFAULT_FIT,
 	escapeText,
+	spellTitleHtml,
 	spellOrdinal,
 	resolveSpellClasses,
 	spellClassLabel,

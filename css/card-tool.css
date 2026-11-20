@@ -1864,6 +1864,12 @@ body.print-debug #print-debug-bar {
     text-overflow: clip
 }
 
+.spell-slash-title,
+.spell-slash-title.title-wrap {
+    white-space: nowrap;
+    overflow-wrap: normal
+}
+
 .spell-card {
     gap: 1.5mm
 }
