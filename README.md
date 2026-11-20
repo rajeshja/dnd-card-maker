@@ -21,8 +21,10 @@ npm install
 npm run serve
 ```
 
-Then open <http://localhost:5050/spell-cards.html>,
-<http://localhost:5050/item-cards.html>, or
+Then open <http://localhost:5050/> for the card-printer home page and choose
+the spell, item, or beast printer. The printers are also available directly at
+<http://localhost:5050/spell-cards.html>,
+<http://localhost:5050/item-cards.html>, and
 <http://localhost:5050/beast-cards.html>.
 
 If the repository was cloned without submodules, run:
@@ -83,6 +85,23 @@ These are unit tests for the shared card-tool text and filter utilities. They do
 not exercise the browser UI or print layout. For layout changes, serve the
 project and check the front/back previews and browser print preview at the
 appropriate A4 orientation.
+
+## GitHub Pages deployment
+
+The repository deploys the static card-printer site from `main` through
+`.github/workflows/deploy-pages.yml`.
+
+After the workflow is present on `main`, enable it once in the repository:
+
+1. Open **Settings > Pages**.
+2. Under **Build and deployment**, set **Source** to **GitHub Actions**.
+3. Push a commit to `main` or run **Deploy card printers to GitHub Pages**
+   manually from the **Actions** tab.
+
+The workflow recursively checks out the pinned 5etools submodule, installs
+locked dependencies, runs the test suite, assembles the runtime allowlist, and
+deploys only that artifact. Development dependencies and project-only files
+are not published.
 
 ## License
 

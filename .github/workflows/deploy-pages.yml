@@ -1,0 +1,81 @@
+name: Deploy card printers to GitHub Pages
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository and pinned submodule
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test -- --runInBand
+
+      - name: Assemble static Pages artifact
+        run: |
+          set -eu
+          rm -rf _site
+          mkdir -p _site
+
+          cp index.html spell-cards.html item-cards.html beast-cards.html favicon.svg _site/
+          cp -R css js card-images _site/
+
+          mkdir -p _site/5etools/data/spells _site/5etools/data/bestiary _site/5etools/data/generated
+          for file in \
+            spells-xphb spells-phb spells-xge spells-tce spells-scc spells-ai spells-ftd \
+            spells-ggr spells-egw spells-idrotf spells-llk spells-aag spells-aitfr-avt \
+            spells-bmt spells-efa spells-frhof spells-sato
+          do
+            cp "5etools/data/spells/${file}.json" "_site/5etools/data/spells/${file}.json"
+          done
+          cp 5etools/data/generated/gendata-spell-source-lookup.json _site/5etools/data/generated/
+
+          cp 5etools/data/items-base.json 5etools/data/items.json 5etools/data/fluff-items.json _site/5etools/data/
+
+          for file in mm xmm mpmm
+          do
+            cp "5etools/data/bestiary/bestiary-${file}.json" "_site/5etools/data/bestiary/"
+            cp "5etools/data/bestiary/fluff-bestiary-${file}.json" "_site/5etools/data/bestiary/"
+          done
+
+          test -f _site/index.html
+          test -f _site/spell-cards.html
+          test -f _site/item-cards.html
+          test -f _site/beast-cards.html
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
